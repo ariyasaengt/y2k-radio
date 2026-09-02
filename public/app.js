@@ -114,10 +114,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let playlist = [];
 
   // ==========================================
-  // 🎥 YouTube IFrame Player (พร้อม Sync เวลา)
+  // 🎥 YouTube IFrame Player (ระบบ Sync ล็อกเวลา)
   // ==========================================
   let ytPlayer = null;
   let isYtReady = false;
+  let pendingVideoId = null;
+  let pendingSeekTime = 0;
   const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
 
   window.onYouTubeIframeAPIReady = function() {
@@ -131,7 +133,13 @@ document.addEventListener('DOMContentLoaded', () => {
         'playsinline': 1
       },
       events: {
-        'onReady': () => { isYtReady = true; },
+        'onReady': () => {
+          isYtReady = true;
+          if (pendingVideoId) {
+            playYouTubeTrack(pendingVideoId, trackTitle.textContent, pendingSeekTime);
+            pendingVideoId = null;
+          }
+        },
         'onStateChange': (e) => {
           if (e.data === YT.PlayerState.PLAYING) {
             if (trackTimerInterval) clearInterval(trackTimerInterval);
@@ -143,6 +151,14 @@ document.addEventListener('DOMContentLoaded', () => {
               if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(current);
               if (trackProgressFill) trackProgressFill.style.width = `${Math.min(100, (current / duration) * 100)}%`;
             }, 1000);
+          }
+
+          // เมื่อคลิปจบ ดีเจ/แอดมิน ดึงเพลงถัดไปจากคิวอัตโนมัติ
+          if (e.data === YT.PlayerState.ENDED) {
+            if (trackTimerInterval) clearInterval(trackTimerInterval);
+            if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
+              playItemAtIndex(0);
+            }
           }
         }
       }
@@ -157,12 +173,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isYtReady && ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
       ytPlayer.loadVideoById({
         videoId: videoId,
-        startSeconds: seekTo
+        startSeconds: Math.floor(seekTo)
       });
 
-      if (seekTo > 0 && typeof ytPlayer.seekTo === 'function') {
-        ytPlayer.seekTo(seekTo, true);
-      }
+      // สั่งข้ามไปยังวินาทีที่กำหนดซ้ำเพื่อความแม่นยำ
+      setTimeout(() => {
+        if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
+          ytPlayer.seekTo(seekTo, true);
+        }
+      }, 500);
 
       if (!isListeningToMain) {
         ytPlayer.mute();
@@ -172,9 +191,25 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       ytPlayer.playVideo();
     } else {
-      setTimeout(() => playYouTubeTrack(videoId, title, seekTo), 800);
+      pendingVideoId = videoId;
+      pendingSeekTime = seekTo;
     }
   }
+
+  // ตัวดักรับ Sync Pulse จากเซิร์ฟเวอร์ทุก 3 วินาที (แก้ปัญหาทุกคนฟังไม่ตรงกัน)
+  socket.on('radio-sync-pulse', (data) => {
+    if (!isYtReady || !ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+    
+    // ตรวจสอบว่ากำลังเล่นคลิปเดียวกันหรือไม่
+    const currentUrl = ytPlayer.getVideoUrl ? ytPlayer.getVideoUrl() : '';
+    if (currentUrl.includes(data.videoId)) {
+      const myTime = ytPlayer.getCurrentTime();
+      // หากเวลาในเครื่องคลาดเคลื่อนจากเวลาเซิร์ฟเวอร์เกิน 2.5 วินาที ให้กระโดดไปเวลาจริงทันที
+      if (Math.abs(myTime - data.currentTime) > 2.5) {
+        ytPlayer.seekTo(data.currentTime, true);
+      }
+    }
+  });
 
   socket.on('play-youtube-track', (data) => {
     initAudioContext();
@@ -769,6 +804,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isYtReady && ytPlayer) {
       ytPlayer.unMute();
       ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
+      
+      // เมื่อกดเปิดฟัง ให้คำนวณเวลา ณ ปัจจุบันของเซิร์ฟเวอร์ทันที
+      if (lastKnownTrack && lastKnownTrack.startedAt) {
+        const syncSec = Math.max(0, (Date.now() - lastKnownTrack.startedAt) / 1000);
+        ytPlayer.seekTo(syncSec, true);
+      }
     }
 
     isListeningToMain = true;
@@ -812,7 +853,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (streamType === 'music') {
         if (currentMusicSource) currentMusicSource.stop();
-        currentMusicSource = source; source.connect(musicGainNode);
+        currentMusicSource = source; 
+        source.connect(musicGainNode);
+
+        source.onended = () => {
+          if (trackTimerInterval) clearInterval(trackTimerInterval);
+          if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
+            playItemAtIndex(0);
+          }
+        };
+
         if (trackTimerInterval) clearInterval(trackTimerInterval);
         const duration = audioBuffer.duration;
         trackTimeTotal.textContent = formatTime(duration);
@@ -830,7 +880,9 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {}
   });
 
+  let lastKnownTrack = null;
   socket.on('track-update', (t) => {
+    lastKnownTrack = t;
     trackTitle.textContent = t.title; trackArtist.textContent = t.artist;
     if (["รอเริ่มรายการ", "จบรายการแล้ว", "ดีเจออฟไลน์"].includes(t.title)) {
       if (trackTimerInterval) clearInterval(trackTimerInterval);
@@ -867,7 +919,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function playItemAtIndex(idx) {
     if (!playlist[idx]) return;
 
-    // ตรวจสอบสถานะว่าเริ่มจัดรายการ (Go Live) แล้วหรือยัง
     if (!isShowLive) {
       alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนเปิดเพลงครับ!");
       return;

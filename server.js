@@ -78,6 +78,17 @@ function checkDayReset() {
   }
 }
 
+// ⏱️ ระบบส่ง Sync Pulse ทุก 3 วินาที เพื่อล็อกให้ทุกคนฟังตรงท่อนเดียวกันเป๊ะๆ
+setInterval(() => {
+  if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
+    const currentSeconds = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
+    io.emit('radio-sync-pulse', {
+      videoId: currentTrack.youtubeId,
+      currentTime: currentSeconds
+    });
+  }
+}, 3000);
+
 io.on('connection', (socket) => {
   onlineUsersCount++;
   io.emit('online-users-count', onlineUsersCount);
@@ -85,14 +96,13 @@ io.on('connection', (socket) => {
 
   socket.emit('dj-status-update', isDJLive);
 
-  // คำนวณตำแหน่งเวลาเพลง YouTube สำหรับผู้ฟังที่เพิ่งเปิดเข้ามากลางคัน
+  // คำนวณตำแหน่งวินาทีปัจจุบันส่งให้คนที่เพิ่งเปิดเข้ามา
   let trackToSend = { ...currentTrack };
   if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
     trackToSend.seekTo = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
   }
   socket.emit('track-update', trackToSend);
 
-  // หากสถานีกำลัง On Air และมีเพลงกำลังเล่น ให้ส่งคำสั่งเล่นพร้อมเวลาเริ่ม seekTo ไปทันที
   if (isDJLive && currentTrack.youtubeId) {
     socket.emit('play-youtube-track', {
       videoId: currentTrack.youtubeId,
@@ -219,9 +229,8 @@ io.on('connection', (socket) => {
     io.emit('dj-stop-youtube');
   });
 
-  // เล่นเพลง YouTube (ต้อง On Air เท่านั้น และบันทึกเวลาเริ่มต้นเพื่อคำนวณ Sync)
   socket.on('dj-play-youtube', (ytData) => {
-    if (!isDJLive) return; // บล็อกถ้ายังไม่ได้เริ่มจัดรายการ
+    if (!isDJLive) return;
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
 
     const startedAt = Date.now();
@@ -241,7 +250,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ดึงชื่อเพลงจริงจาก YouTube oEmbed ฝั่งเซิร์ฟเวอร์
   socket.on('dj-add-youtube-to-playlist', async (item) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
 
@@ -252,9 +260,7 @@ io.on('connection', (socket) => {
       const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(ytUrl)}&format=json`);
       if (response.ok) {
         const info = await response.json();
-        if (info && info.title) {
-          songTitle = info.title;
-        }
+        if (info && info.title) songTitle = info.title;
       }
     } catch (err) {
       console.error("YouTube oEmbed fetch error:", err.message);
