@@ -4,13 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Y2K Messenger Radio</title>
-  <!-- โหลด hls.js เพื่อให้เล่นคลื่นวิทยุไทยแบบ HLS ได้ทุกเบราว์เซอร์ -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <!-- โหลด YouTube IFrame API -->
+  <script src="https://www.youtube.com/iframe_api"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <canvas id="glitter-canvas"></canvas>
   <div id="heart-container" class="heart-container"></div>
+
+  <!-- จุดฝัง YouTube Player ซ่อนเบื้องหลัง -->
+  <div id="yt-player-hidden" style="position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;"></div>
 
   <div id="main-app-window" class="desktop-wrap">
     <!-- แถบซ้าย: ควบคุมสถานีวิทยุ -->
@@ -32,14 +36,13 @@
       </div>
 
       <div class="side-content">
-        <!-- Now Playing + Visualizer + Track Progress -->
+        <!-- Now Playing + Visualizer -->
         <div class="section-box">
           <div class="section-title">Now Playing (Main)</div>
           <div class="now-playing-box">
             <div id="track-title" class="track-title">รอเริ่มรายการ</div>
             <div id="track-artist" class="track-sub">Offline</div>
             
-            <!-- ตัวนับเวลาแทร็ก -->
             <div class="track-timer-row">
               <span id="track-time-current">00:00</span>
               <div class="track-progress-bg">
@@ -56,24 +59,21 @@
           </div>
         </div>
 
-        <!-- Thai Radio Tuner (คัดเฉพาะคลื่นสดออนไลน์ 100%) -->
+        <!-- คลื่นวิทยุไทยสด -->
         <div class="section-box tuner-box">
           <div class="section-title">Thai Radio Tuner (คลื่นวิทยุไทยสด)</div>
           <select id="backup-station-select" class="y2k-select">
             <option value="">-- เลือกคลื่นวิทยุไทยยอดนิยม --</option>
-            
             <optgroup label="🎵 เพลงสตริง / สากลฮิต">
-              <option value="https://coolism-web-streaming.cdn.byteark.com/live/coolfahrenheit.m3u8">COOL Fahrenheit 93 (เพลงฮิตต่อเนื่อง)</option>
-              <option value="https://streaming.catradio.tv/catradio.mp3">Cat Radio (เพลงอินดี้ & นอกกระแสยอดฮิต)</option>
+              <option value="https://coolism-web-streaming.cdn.byteark.com/live/coolfahrenheit.m3u8">COOL Fahrenheit 93</option>
+              <option value="https://streaming.catradio.tv/catradio.mp3">Cat Radio</option>
             </optgroup>
-
             <optgroup label="🌾 ลูกทุ่ง / หมอลำ">
-              <option value="https://radio12.plathong.net/7086/;stream.mp3">ลูกทุ่งมหานคร LTMFM 95 (อสมท.)</option>
+              <option value="https://radio12.plathong.net/7086/;stream.mp3">ลูกทุ่งมหานคร LTMFM 95</option>
             </optgroup>
-
             <optgroup label="📻 ข่าวสาร / จราจร">
-              <option value="https://mcotradio.net/fm1005.mp3">MCOT News FM 100.5 (เกาะติดสถานการณ์)</option>
-              <option value="https://fm91bkk.com:8443/live">FM 91 สวพ. (ข่าวสารและสภาพจราจร)</option>
+              <option value="https://mcotradio.net/fm1005.mp3">MCOT News FM 100.5</option>
+              <option value="https://fm91bkk.com:8443/live">FM 91 สวพ.</option>
             </optgroup>
           </select>
           <audio id="backup-audio-player" controls style="width: 100%; height: 28px; margin-top: 6px;"></audio>
@@ -86,7 +86,7 @@
           </ul>
         </div>
 
-        <!-- กล่องสำหรับดีเจ -->
+        <!-- แผงดีเจ -->
         <div class="section-box dj-panel">
           <div class="section-title">DJ Booth (Admin)</div>
           
@@ -100,6 +100,31 @@
               <button type="button" id="btn-dj-logout" class="y2k-btn logout-btn">🚪 ออกจากระบบ</button>
             </div>
 
+            <!-- กล่องเลือกไฟล์เพลง MP3 -->
+            <div class="upload-music-box">
+              <label for="dj-file-input" class="y2k-btn primary-btn upload-music-btn">
+                📂 + เลือกไฟล์ MP3 ในเครื่องเข้าคิว
+              </label>
+              <input type="file" id="dj-file-input" accept="audio/*" multiple style="display: none;">
+            </div>
+
+            <!-- กล่องเปิดเพลงด้วย YouTube URL -->
+            <div class="yt-input-box">
+              <span class="sub-label">▶ เปิดเพลงจากลิงก์ YouTube:</span>
+              <div class="input-row">
+                <input type="text" id="dj-yt-url" class="y2k-input flex-1" placeholder="วางลิงก์ เช่น https://youtu.be/...">
+                <button type="button" id="btn-play-yt" class="y2k-btn yt-play-btn">เปิดสด</button>
+              </div>
+            </div>
+
+            <!-- กล่องคำขอเพลง -->
+            <div class="requests-queue-box">
+              <div class="sfx-title">📥 เพลงที่คนขอเข้ามา (<span id="req-count">0</span>)</div>
+              <ul id="requests-list" class="requests-list">
+                <li>ยังไม่มีคำขอเพลง</li>
+              </ul>
+            </div>
+
             <div class="topic-setter-box">
               <span class="sub-label">✏️ หัวข้อจัดรายการวันนี้:</span>
               <div class="input-row">
@@ -108,7 +133,6 @@
               </div>
             </div>
 
-            <!-- กล่องจัดการและปักหมุดข้อความแชท -->
             <div class="moderation-box">
               <span class="sub-label">📌 ปักหมุดประกาศแชท:</span>
               <div class="input-row">
@@ -124,13 +148,11 @@
             </div>
 
             <div id="dj-broadcast-tools" class="broadcast-tools hide">
-              <input type="file" id="dj-file-input" accept="audio/*" multiple>
               <div class="btn-group">
                 <button id="btn-mic" class="y2k-btn">🎙️ เปิดไมค์</button>
-                <button id="btn-play-music" class="y2k-btn">🎵 เปิดเพลงถัดไป</button>
+                <button id="btn-play-music" class="y2k-btn">🎵 เล่น MP3 ถัดไป</button>
               </div>
 
-              <!-- แผงซาวด์เอฟเฟกต์ดีเจ -->
               <div class="sfx-box">
                 <div class="sfx-title">📢 DJ Sound FX</div>
                 <div class="sfx-grid">
@@ -141,15 +163,6 @@
                 </div>
               </div>
 
-              <!-- รายการขอเพลง -->
-              <div class="requests-queue-box">
-                <div class="sfx-title">📥 เพลงที่คนขอเข้ามา (<span id="req-count">0</span>)</div>
-                <ul id="requests-list" class="requests-list">
-                  <li>ยังไม่มีคำขอเพลง</li>
-                </ul>
-              </div>
-
-              <!-- Mixer ปรับระดับเสียง -->
               <div class="mixer-box">
                 <div class="mixer-title">🎚️ DJ Audio Mixer</div>
                 <div class="slider-item">
@@ -181,20 +194,17 @@
         <span class="title">Live Chat & Shoutbox</span>
       </div>
 
-      <!-- แถบข้อความวิ่ง Retro Marquee -->
       <div class="marquee-ticker">
         <marquee scrollamount="4" behavior="scroll" direction="left">
-          ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • พิมพ์ขอเพลงกันเข้ามาได้เลย • กดปุ่มสะกิดเพื่อเรียกเพื่อน • ติดตามฟังสดได้ตลอด 24 ชั่วโมง ✨
+          ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • เปิดเพลงสดทั้งจาก MP3 และ YouTube • ส่งคำขอเพลงกันได้ตลอด 24 ชั่วโมง ✨
         </marquee>
       </div>
 
-      <!-- ป้ายหัวข้อใหญ่ประจำวัน -->
       <div class="topic-banner">
         <div class="topic-tag">🌟 TOPIC TODAY</div>
         <div id="display-topic" class="topic-text">กำลังโหลดหัวข้อ...</div>
       </div>
 
-      <!-- แถบข้อความปักหมุด (ถ้ามี) -->
       <div id="pinned-banner" class="pinned-banner hide">
         <span class="pinned-icon">📌</span>
         <span id="pinned-text" class="pinned-text"></span>
@@ -206,7 +216,6 @@
 
       <div id="chat-logs" class="chat-logs"></div>
 
-      <!-- กล่องพิมพ์แชท -->
       <div class="chat-input-area">
         <div id="typing-indicator" class="typing-status hide"></div>
 
@@ -228,24 +237,20 @@
             <input type="color" id="chat-color" value="#000000">
           </label>
 
-          <!-- ปุ่ม Reaction หัวใจลอย -->
           <button type="button" id="btn-heart-reaction" class="tool-btn heart-btn" title="กดส่งหัวใจให้ดีเจและเพื่อนๆ">
             💖
           </button>
 
-          <!-- ปุ่มสะกิด MSN Nudge -->
           <button type="button" id="btn-nudge" class="tool-btn nudge-btn" title="ส่งสัญญาณสะกิด MSN สั่นหน้าจอ!">
             💥 สะกิด
           </button>
         </div>
 
-        <!-- แถวชื่อเล่น + MSN Status Tagline -->
         <div class="input-row" style="margin-bottom: 5px;">
           <input type="text" id="username" class="y2k-input" placeholder="ชื่อเล่น" style="width: 130px;">
           <input type="text" id="userstatus" class="y2k-input flex-1" placeholder="สเตตัส MSN (เช่น กำลังคิดถึงใครบางคน...)">
         </div>
 
-        <!-- แถวพิมพ์ข้อความและปุ่มส่ง -->
         <div class="input-row">
           <input type="text" id="chat-message" class="y2k-input flex-1" placeholder="พิมพ์ข้อความส่งถึงดีเจ...">
           <button id="btn-send" class="y2k-btn jelly-btn">Send</button>
@@ -258,7 +263,6 @@
     </main>
   </div>
 
-  <!-- ป๊อปอัปขอเพลง -->
   <div id="request-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -267,8 +271,8 @@
       </div>
       <div class="modal-body">
         <div>
-          <label style="font-weight: bold; font-size: 11px;">ชื่อเพลง + ศิลปิน:</label>
-          <input type="text" id="req-song-input" class="y2k-input" placeholder="เช่น วัดใจ - Silly Fools" style="width: 100%; margin-top: 3px;">
+          <label style="font-weight: bold; font-size: 11px;">ชื่อเพลง + ศิลปิน (หรือลิงก์ YouTube):</label>
+          <input type="text" id="req-song-input" class="y2k-input" placeholder="เช่น วัดใจ - Silly Fools หรือ ลิงก์เพลง" style="width: 100%; margin-top: 3px;">
         </div>
         <div>
           <label style="font-weight: bold; font-size: 11px;">ข้อความฝากถึงดีเจ / คนพิเศษ:</label>
@@ -282,7 +286,6 @@
     </div>
   </div>
 
-  <!-- ป๊อปอัปใส่รหัสดีเจ -->
   <div id="dj-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -302,6 +305,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

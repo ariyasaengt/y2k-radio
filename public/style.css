@@ -16,7 +16,6 @@
   z-index: 99999;
 }
 
-/* คอนเทนเนอร์แสดงปฏิกิริยาหัวใจลอย */
 .heart-container {
   position: fixed;
   bottom: 20px;
@@ -303,6 +302,33 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.upload-music-box {
+  margin: 6px 0;
+}
+
+.upload-music-btn {
+  display: block;
+  text-align: center;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: 5px;
+  font-weight: bold;
+}
+
+.yt-input-box {
+  background: #fff;
+  border: 1px solid #f87171;
+  border-radius: 4px;
+  padding: 6px;
+  margin-bottom: 6px;
+}
+
+.yt-play-btn {
+  background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%) !important;
+  color: #fff !important;
+  border-color: #991b1b !important;
 }
 
 .topic-setter-box, .moderation-box {
@@ -780,7 +806,6 @@ body {
   font-weight: bold;
 }
 
-/* Responsive View */
 @media (max-width: 768px) {
   body {
     height: auto !important;

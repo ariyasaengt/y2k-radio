@@ -43,6 +43,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnUnpinMsg = document.getElementById('btn-unpin-msg');
   const btnClearChat = document.getElementById('btn-clear-chat');
 
+  // YouTube Control
+  const djYtUrl = document.getElementById('dj-yt-url');
+  const btnPlayYt = document.getElementById('btn-play-yt');
+
   // Nudge, Reactions, SFX
   const btnNudge = document.getElementById('btn-nudge');
   const btnHeartReaction = document.getElementById('btn-heart-reaction');
@@ -87,7 +91,86 @@ document.addEventListener('DOMContentLoaded', () => {
   let previousMusicVol = 80;
 
   // ==========================================
-  // 📻 ระบบเล่นคลื่นวิทยุไทยสด (รองรับทั้ง MP3 และ HLS)
+  // 🎥 YouTube IFrame Background Player
+  // ==========================================
+  let ytPlayer = null;
+  let isYtReady = false;
+
+  window.onYouTubeIframeAPIReady = function() {
+    ytPlayer = new YT.Player('yt-player-hidden', {
+      height: '1',
+      width: '1',
+      playerVars: {
+        'autoplay': 1,
+        'controls': 0,
+        'disablekb': 1,
+        'fs': 0
+      },
+      events: {
+        'onReady': () => { isYtReady = true; },
+        'onStateChange': onPlayerStateChange
+      }
+    });
+  };
+
+  function extractYouTubeID(url) {
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  }
+
+  function onPlayerStateChange(event) {
+    if (event.data === YT.PlayerState.PLAYING) {
+      if (trackTimerInterval) clearInterval(trackTimerInterval);
+      const duration = ytPlayer.getDuration();
+      if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
+
+      trackTimerInterval = setInterval(() => {
+        if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+        const current = ytPlayer.getCurrentTime();
+        if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(current);
+        if (trackProgressFill) {
+          const percent = Math.min(100, (current / duration) * 100);
+          trackProgressFill.style.width = `${percent}%`;
+        }
+      }, 1000);
+    }
+  }
+
+  // ดีเจกดเล่นเพลงผ่าน YouTube URL
+  if (btnPlayYt) {
+    btnPlayYt.addEventListener('click', () => {
+      const url = djYtUrl.value.trim();
+      if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
+      const videoId = extractYouTubeID(url);
+      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง!");
+
+      socket.emit('dj-play-youtube', { videoId, title: "YouTube On Air" });
+      djYtUrl.value = '';
+    });
+  }
+
+  socket.on('play-youtube-track', (data) => {
+    initAudioContext();
+    if (currentMusicSource) {
+      currentMusicSource.stop();
+      currentMusicSource = null;
+    }
+    if (isYtReady && ytPlayer) {
+      ytPlayer.loadVideoById(data.videoId);
+      ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
+      ytPlayer.playVideo();
+    }
+  });
+
+  socket.on('dj-stop-youtube', () => {
+    if (isYtReady && ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+      ytPlayer.stopVideo();
+    }
+  });
+
+  // ==========================================
+  // 📻 Thai Radio Streams
   // ==========================================
   if (backupStationSelect) {
     backupStationSelect.addEventListener('change', (e) => {
@@ -99,7 +182,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // ตรวจสอบว่าเป็นสตรีม HLS (.m3u8) หรือไม่
       if (streamUrl.includes('.m3u8')) {
         if (Hls.isSupported()) {
           if (currentHls) currentHls.destroy();
@@ -455,9 +537,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ==========================================
-  // 🔔 เสียงแจ้งเตือนข้อความเด้ง
-  // ==========================================
   function playNotificationSound() {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -492,6 +571,9 @@ document.addEventListener('DOMContentLoaded', () => {
         micGainNode.gain.setValueAtTime(vols.mic, listenAudioCtx.currentTime);
       }
     }
+    if (isYtReady && ytPlayer && vols.music !== undefined) {
+      ytPlayer.setVolume(Math.round(vols.music * 100));
+    }
   });
 
   if (sliderMusicVol) {
@@ -502,6 +584,9 @@ document.addEventListener('DOMContentLoaded', () => {
       socket.emit('dj-volume-change', { type: 'music', volume: floatVal });
       if (listenAudioCtx && musicGainNode) {
         musicGainNode.gain.setValueAtTime(floatVal, listenAudioCtx.currentTime);
+      }
+      if (isYtReady && ytPlayer) {
+        ytPlayer.setVolume(val);
       }
     });
   }
@@ -526,6 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (labelMusicVol) labelMusicVol.textContent = "20%";
         socket.emit('dj-volume-change', { type: 'music', volume: 0.2 });
         if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(0.2, listenAudioCtx.currentTime);
+        if (isYtReady && ytPlayer) ytPlayer.setVolume(20);
         btnDucking.classList.add('active');
         btnDucking.textContent = "🔊 คืนระดับเสียงเพลงเดิม";
         isDucking = true;
@@ -535,6 +621,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const floatVal = previousMusicVol / 100;
         socket.emit('dj-volume-change', { type: 'music', volume: floatVal });
         if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(floatVal, listenAudioCtx.currentTime);
+        if (isYtReady && ytPlayer) ytPlayer.setVolume(previousMusicVol);
         btnDucking.classList.remove('active');
         btnDucking.textContent = "🔉 หรี่เพลงพูดไมค์ (Ducking)";
         isDucking = false;
@@ -674,7 +761,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Typing Indicator
   let typingTimeout = null;
   if (chatInput) {
     chatInput.addEventListener('input', () => {
@@ -772,7 +858,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Formatting Toolbar
   if (btnBold) {
     btnBold.onclick = () => {
       currentStyle.bold = !currentStyle.bold;
@@ -821,9 +906,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // ==========================================
-  // ⏱️ Main Audio & Track Timer
-  // ==========================================
   let isBroadcastingMic = false;
   let mediaRecorder = null;
   let playlist = [];
@@ -840,6 +922,9 @@ document.addEventListener('DOMContentLoaded', () => {
       initAudioContext();
       if (listenAudioCtx.state === 'suspended') {
         await listenAudioCtx.resume();
+      }
+      if (isYtReady && ytPlayer && typeof ytPlayer.playVideo === 'function') {
+        ytPlayer.playVideo();
       }
       btnListen.textContent = "🔊 กำลังรับฟังสด";
       btnListen.style.filter = "hue-rotate(90deg)";
@@ -864,7 +949,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentMusicSource = source;
         source.connect(musicGainNode);
 
-        // จัดการนับเวลาเพลง
         if (trackTimerInterval) clearInterval(trackTimerInterval);
         const duration = audioBuffer.duration;
         if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
@@ -927,7 +1011,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnPlayMusic.onclick = async () => {
       if (playlist.length === 0) return alert('กรุณาเลือกไฟล์เพลงก่อน');
       const file = playlist.shift();
-      socket.emit('dj-update-track', { track: { title: file.name, artist: "DJ On Air" } });
+      socket.emit('dj-update-track', { track: { title: file.name, artist: "DJ On Air (MP3)" } });
       const arrayBuffer = await file.arrayBuffer();
       socket.emit('dj-audio-stream', { type: 'music', buffer: arrayBuffer });
     };

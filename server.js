@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -15,25 +16,64 @@ const DJ_SECRET_KEY = "1234";
 
 let isDJLive = false;
 let activeDJSockets = new Set();
-let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0 };
+let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0, youtubeId: null };
 let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨";
 let pinnedMessage = null;
 let playlist = [];
 let songRequests = [];
-let chatHistory = [];
-let currentDay = new Date().toLocaleDateString('th-TH');
 
 let onlineUsersCount = 0;
 let currentVolumes = { music: 0.8, mic: 1.0 };
 
+const CHAT_FILE = path.join(__dirname, 'chat_history.json');
+let chatHistory = [];
+
+function getTodayString() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+let currentDay = getTodayString();
+
+function loadChatHistory() {
+  try {
+    if (fs.existsSync(CHAT_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CHAT_FILE, 'utf-8'));
+      if (data.savedDay === currentDay && Array.isArray(data.history)) {
+        chatHistory = data.history;
+      } else {
+        chatHistory = [];
+        saveChatHistory();
+      }
+    }
+  } catch (err) {
+    console.error("Error reading chat file:", err);
+    chatHistory = [];
+  }
+}
+
+function saveChatHistory() {
+  try {
+    fs.writeFileSync(CHAT_FILE, JSON.stringify({
+      savedDay: currentDay,
+      history: chatHistory
+    }, null, 2), 'utf-8');
+  } catch (err) {
+    console.error("Error writing chat file:", err);
+  }
+}
+
+loadChatHistory();
+
 function checkDayReset() {
-  const today = new Date().toLocaleDateString('th-TH');
+  const today = getTodayString();
   if (today !== currentDay) {
     chatHistory = [];
     songRequests = [];
     pinnedMessage = null;
     currentDay = today;
     todayTopic = "วันนี้เปิดรับทุกแนวเพลง ทักทายกันได้นะ!";
+    saveChatHistory();
     io.emit('chat-history-cleared');
     io.emit('topic-update', todayTopic);
     io.emit('requests-update', songRequests);
@@ -53,10 +93,9 @@ io.on('connection', (socket) => {
   socket.emit('pinned-update', pinnedMessage);
   socket.emit('volume-update', currentVolumes);
   socket.emit('playlist-update', playlist);
-  socket.emit('chat-history', chatHistory);
   socket.emit('requests-update', songRequests);
+  socket.emit('chat-history', chatHistory);
 
-  // ระบบแชท รองรับ MSN Status Tagline
   socket.on('chat-message', (data) => {
     checkDayReset();
     const newMsg = {
@@ -69,20 +108,13 @@ io.on('connection', (socket) => {
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     chatHistory.push(newMsg);
+    saveChatHistory();
     io.emit('chat-message', newMsg);
   });
 
-  // Reaction หัวใจลอย
-  socket.on('send-reaction', (type) => {
-    io.emit('receive-reaction', type || '❤️');
-  });
+  socket.on('send-reaction', (type) => io.emit('receive-reaction', type || '❤️'));
+  socket.on('send-nudge', (username) => io.emit('receive-nudge', { user: username || 'ใครบางคน' }));
 
-  // Nudge สั่นหน้าจอ
-  socket.on('send-nudge', (username) => {
-    io.emit('receive-nudge', { user: username || 'ใครบางคน' });
-  });
-
-  // คำขอเพลง
   socket.on('submit-song-request', (reqData) => {
     const item = {
       id: Date.now(),
@@ -113,11 +145,11 @@ io.on('connection', (socket) => {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       chatHistory.push(announceMsg);
+      saveChatHistory();
       io.emit('chat-message', announceMsg);
     }
   });
 
-  // ปักหมุดและล้างแชทโดยดีเจ
   socket.on('dj-pin-message', (msgText) => {
     if (!socket.isDJ) return;
     pinnedMessage = msgText ? msgText.trim() : null;
@@ -127,10 +159,10 @@ io.on('connection', (socket) => {
   socket.on('dj-clear-chat', () => {
     if (!socket.isDJ) return;
     chatHistory = [];
+    saveChatHistory();
     io.emit('chat-history-cleared');
   });
 
-  // ซาวด์เอฟเฟกต์ดีเจ
   socket.on('dj-play-sfx', (fxType) => {
     if (!socket.isDJ) return;
     io.emit('play-sfx', fxType);
@@ -176,9 +208,23 @@ io.on('connection', (socket) => {
   socket.on('dj-end-show', () => {
     if (!socket.isDJ) return;
     isDJLive = false;
-    currentTrack = { title: "จบรายการแล้ว", artist: "Offline", duration: 0 };
+    currentTrack = { title: "จบรายการแล้ว", artist: "Offline", duration: 0, youtubeId: null };
     io.emit('dj-status-update', false);
     io.emit('track-update', currentTrack);
+    io.emit('dj-stop-youtube');
+  });
+
+  // เล่นเพลงผ่าน YouTube สำหรับผู้ฟังทุกคน
+  socket.on('dj-play-youtube', (ytData) => {
+    if (!socket.isDJ || !isDJLive) return;
+    currentTrack = {
+      title: ytData.title || "YouTube Audio",
+      artist: "DJ Broadcast (YouTube)",
+      duration: 0,
+      youtubeId: ytData.videoId
+    };
+    io.emit('track-update', currentTrack);
+    io.emit('play-youtube-track', ytData);
   });
 
   socket.on('dj-update-track', (data) => {
@@ -206,9 +252,10 @@ io.on('connection', (socket) => {
       activeDJSockets.delete(socket.id);
       if (activeDJSockets.size === 0 && isDJLive) {
         isDJLive = false;
-        currentTrack = { title: "ดีเจออฟไลน์", artist: "Offline", duration: 0 };
+        currentTrack = { title: "ดีเจออฟไลน์", artist: "Offline", duration: 0, youtubeId: null };
         io.emit('dj-status-update', false);
         io.emit('track-update', currentTrack);
+        io.emit('dj-stop-youtube');
       }
     }
   });
