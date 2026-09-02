@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Y2K Messenger Radio</title>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script src="https://www.youtube.com/iframe_api"></script>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -52,21 +51,21 @@
           </div>
         </div>
 
-        <!-- Thai Radio Tuner -->
+        <!-- Thai Radio Tuner (Public HTTPS Stream ไม่ติด CORS) -->
         <div class="section-box tuner-box">
           <div class="section-title">Thai Radio Tuner (คลื่นวิทยุไทยสด)</div>
           <select id="backup-station-select" class="y2k-select">
             <option value="">-- เลือกคลื่นวิทยุไทยยอดนิยม --</option>
             <optgroup label="🎵 เพลงสตริง / สากลฮิต">
-              <option value="https://coolism-web-streaming.cdn.byteark.com/live/coolfahrenheit.m3u8">COOL Fahrenheit 93</option>
-              <option value="https://streaming.catradio.tv/catradio.mp3">Cat Radio</option>
+              <option value="https://stream.zeno.fm/0r0xa792kwzuv">CityPop & Retro Asian Pop (24 ชม.)</option>
+              <option value="https://stream.zeno.fm/u2768tz918zuv">Thai Pop Hits Radio</option>
             </optgroup>
-            <optgroup label="🌾 ลูกทุ่ง / หมอลำ">
-              <option value="https://radio12.plathong.net/7086/;stream.mp3">ลูกทุ่งมหานคร LTMFM 95</option>
+            <optgroup label="🌾 ลูกทุ่ง / เพื่อชีวิต">
+              <option value="https://stream.zeno.fm/4wy075u3a0hvv">เพลงลูกทุ่ง & หมอลำ เรดิโอ</option>
+              <option value="https://stream.zeno.fm/k2k5uuv3a0hvv">เพลงเพื่อชีวิต อมตะ</option>
             </optgroup>
-            <optgroup label="📻 ข่าวสาร / จราจร">
-              <option value="https://mcotradio.net/fm1005.mp3">MCOT News FM 100.5</option>
-              <option value="https://fm91bkk.com:8443/live">FM 91 สวพ.</option>
+            <optgroup label="📻 ข่าวสาร / ทอล์กโชว์">
+              <option value="https://stream.zeno.fm/f38y8b93a0hvv">Thai News & Variety Talk</option>
             </optgroup>
           </select>
           <audio id="backup-audio-player" controls style="width: 100%; height: 28px; margin-top: 6px;"></audio>
@@ -83,7 +82,6 @@
         <div class="section-box dj-panel">
           <div class="section-title">Broadcast Booth</div>
           
-          <!-- ปุ่มเข้าสู่ระบบ / สมัครดีเจ -->
           <div id="dj-login-section" class="btn-group">
             <button id="btn-open-login-modal" class="y2k-btn primary-btn flex-1">🔐 เข้าสู่ระบบ</button>
             <button id="btn-open-register-modal" class="y2k-btn request-btn">📝 สมัครดีเจ</button>
@@ -100,24 +98,24 @@
             <button id="btn-dj-portal-logout" class="y2k-btn logout-btn" style="margin-top: 6px;">🚪 ออกจากระบบ</button>
           </div>
 
-          <!-- แผงจัดรายการเมื่อได้รับการอนุมัติ หรือเป็น Admin -->
+          <!-- แผงจัดรายการเมื่อได้รับการอนุมัติ หรือเป็น Super Admin -->
           <div id="dj-controls-section" class="dj-controls hide">
             <div class="dj-header-bar">
               <span id="role-badge" class="dj-badge-status">🎧 สิทธิ์: กำลังโหลด</span>
               <button type="button" id="btn-dj-logout" class="y2k-btn logout-btn">🚪 ออกจากระบบ</button>
             </div>
 
-            <!-- กล่องเฉพาะ Super Admin 1: อนุมัติดีเจที่ขอจัดรายการ -->
+            <!-- กล่อง Super Admin 1: คิวดีเจรออนุมัติ -->
             <div id="admin-approval-panel" class="admin-panel hide">
-              <div class="sfx-title">👑 คิวดีเจที่รออนุมัติ (<span id="dj-queue-count">0</span>)</div>
+              <div class="sfx-title">👑 คิวดีเจที่รออนุมัติ <span>(<span id="dj-queue-count">0</span>)</span></div>
               <ul id="dj-approval-list" class="requests-list">
                 <li>ไม่มีดีเจรออนุมัติ</li>
               </ul>
             </div>
 
-            <!-- กล่องเฉพาะ Super Admin 2: ตรวจสอบรายชื่อดีเจทั้งหมดที่ลงทะเบียนไว้ -->
+            <!-- กล่อง Super Admin 2: จัดการบัญชีดีเจที่ลงทะเบียน -->
             <div id="admin-registered-djs-box" class="admin-panel hide" style="margin-top: 6px;">
-              <div class="sfx-title">📋 ดีเจที่ลงทะเบียนไว้ (<span id="reg-dj-count">0</span>)</div>
+              <div class="sfx-title">📋 ดีเจที่ลงทะเบียนไว้ <span>(<span id="reg-dj-count">0</span>)</span></div>
               <ul id="registered-djs-list" class="requests-list">
                 <li>ยังไม่มีดีเจลงทะเบียน</li>
               </ul>
@@ -139,7 +137,7 @@
             </div>
 
             <div class="requests-queue-box">
-              <div class="sfx-title">📥 เพลงที่คนขอเข้ามา (<span id="req-count">0</span>)</div>
+              <div class="sfx-title">📥 เพลงที่คนขอเข้ามา <span>(<span id="req-count">0</span>)</span></div>
               <ul id="requests-list" class="requests-list">
                 <li>ยังไม่มีคำขอเพลง</li>
               </ul>
@@ -269,7 +267,6 @@
     </main>
   </div>
 
-  <!-- ป๊อปอัปขอเพลง -->
   <div id="request-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -293,7 +290,6 @@
     </div>
   </div>
 
-  <!-- ป๊อปอัปเข้าสู่ระบบ -->
   <div id="login-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -318,7 +314,6 @@
     </div>
   </div>
 
-  <!-- ป๊อปอัปสมัครสมาชิกเป็นดีเจ -->
   <div id="register-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -344,6 +339,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>

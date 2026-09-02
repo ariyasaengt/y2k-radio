@@ -373,11 +373,23 @@ body {
   margin-top: 6px;
 }
 
+/* จัดกึ่งกลางตัวเลขในวงเล็บให้ตรงบรรทัด ไม่ลอย */
 .sfx-title {
   font-weight: bold;
   font-size: 11px;
   color: #1e3a8a;
   margin-bottom: 5px;
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px;
+  line-height: 1.2 !important;
+}
+
+.sfx-title span {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  line-height: normal;
 }
 
 .sfx-grid {
@@ -503,7 +515,6 @@ body {
 .chat-bubble { padding: 3px 0; }
 .chat-bubble .meta { color: #0055ea; font-weight: bold; font-size: 11px; }
 
-/* ยศในห้องแชท */
 .role-badge-admin {
   background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
   color: #fef08a !important;
@@ -681,7 +692,7 @@ body {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px; }
 .error-msg { color: #cc0000; font-size: 11px; font-weight: bold; }
 
-/* แก้ปัญหาปุ่มล้นขอบทั้งหมดใน sidebar */
+/* จัดการความกว้างและป้องกันปุ่มล้นขอบใน sidebar */
 .side-bar .input-row {
   display: flex !important;
   gap: 4px !important;
@@ -717,19 +728,4 @@ body {
   .input-row { flex-wrap: wrap; }
   #username, #userstatus { width: 100% !important; }
   #btn-send { width: 70px; }
-}
-
-/* จัดระดับตัวเลขในวงเล็บและหัวข้อกล่องให้อยู่ตรงกลางบรรทัดเท่ากัน */
-.sfx-title {
-  display: flex !important;
-  align-items: center !important;
-  gap: 4px;
-  line-height: 1.2 !important;
-}
-
-.sfx-title span {
-  display: inline-flex;
-  align-items: center;
-  vertical-align: middle;
-  line-height: normal;
 }

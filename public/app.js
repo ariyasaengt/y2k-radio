@@ -26,9 +26,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const backupStationSelect = document.getElementById('backup-station-select');
   const backupAudioPlayer = document.getElementById('backup-audio-player');
-  let currentHls = null;
 
-  // ควบคุมสิทธิ์ / Portal / แผงดูดีเจที่ลงทะเบียน
+  // สิทธิ์ / Portal / แผงดีเจ
   const btnOpenLoginModal = document.getElementById('btn-open-login-modal');
   const btnOpenRegisterModal = document.getElementById('btn-open-register-modal');
   const djLoginSection = document.getElementById('dj-login-section');
@@ -111,6 +110,28 @@ document.addEventListener('DOMContentLoaded', () => {
   let isShowLive = false;
   let isDucking = false;
   let previousMusicVol = 80;
+
+  // ==========================================
+  // 📻 Thai Radio Streams (Direct HTTPS Audio)
+  // ==========================================
+  if (backupStationSelect) {
+    backupStationSelect.addEventListener('change', (e) => {
+      const streamUrl = e.target.value;
+      if (!streamUrl) {
+        backupAudioPlayer.pause();
+        backupAudioPlayer.removeAttribute('src');
+        backupAudioPlayer.load();
+        return;
+      }
+      backupAudioPlayer.pause();
+      backupAudioPlayer.src = streamUrl;
+      backupAudioPlayer.load();
+      const playPromise = backupAudioPlayer.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => console.warn("Autoplay blocked:", err));
+      }
+    });
+  }
 
   // ==========================================
   // 🔐 ระบบสมัคร / ล็อกอิน / จัดการดีเจ
@@ -239,7 +260,6 @@ document.addEventListener('DOMContentLoaded', () => {
     djPortalWaitingText.classList.remove('hide');
   });
 
-  // แสดงคิวดีเจที่รออนุมัติ
   socket.on('admin-dj-queue-update', (queue) => {
     if (myRole !== 'admin' || !djApprovalList) return;
     djQueueCount.textContent = queue.length;
@@ -268,7 +288,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // แสดงรายชื่อดีเจทั้งหมดที่ลงทะเบียนไว้
   socket.on('admin-registered-djs-update', (djList) => {
     if (myRole !== 'admin' || !registeredDjsList) return;
     regDjCount.textContent = djList.length;
@@ -397,34 +416,6 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.on('dj-stop-youtube', () => {
     if (isYtReady && ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
   });
-
-  // ==========================================
-  // 📻 Thai Radio Streams
-  // ==========================================
-  if (backupStationSelect) {
-    backupStationSelect.addEventListener('change', (e) => {
-      const streamUrl = e.target.value;
-      if (!streamUrl) {
-        if (currentHls) { currentHls.destroy(); currentHls = null; }
-        backupAudioPlayer.pause(); backupAudioPlayer.src = '';
-        return;
-      }
-      if (streamUrl.includes('.m3u8')) {
-        if (Hls.isSupported()) {
-          if (currentHls) currentHls.destroy();
-          currentHls = new Hls();
-          currentHls.loadSource(streamUrl);
-          currentHls.attachMedia(backupAudioPlayer);
-          currentHls.on(Hls.Events.MANIFEST_PARSED, () => backupAudioPlayer.play().catch(console.warn));
-        } else if (backupAudioPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-          backupAudioPlayer.src = streamUrl; backupAudioPlayer.play().catch(console.warn);
-        }
-      } else {
-        if (currentHls) { currentHls.destroy(); currentHls = null; }
-        backupAudioPlayer.src = streamUrl; backupAudioPlayer.play().catch(console.warn);
-      }
-    });
-  }
 
   // ==========================================
   // ✨ Glitter & Reactions & Nudge
@@ -675,7 +666,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ==========================================
-  // 💬 แชทพร้อมป้ายยศแสดงตำแหน่ง
+  // 💬 แชท
   // ==========================================
   let typingTimeout = null;
   chatInput.addEventListener('input', () => {
