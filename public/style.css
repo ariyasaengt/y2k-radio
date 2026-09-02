@@ -510,3 +510,30 @@ body {
   font-size: 11px;
   font-weight: bold;
 }
+
+/* แถบหัวสถานะและปุ่มล็อกเอาท์ดีเจ */
+.dj-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.dj-header-bar .dj-badge-status {
+  margin-bottom: 0;
+  flex: 1;
+}
+
+.logout-btn {
+  background: linear-gradient(180deg, #ffd4d4 0%, #fca5a5 100%) !important;
+  color: #7f1d1d !important;
+  border: 1px solid #ef4444 !important;
+  font-size: 11px !important;
+  padding: 3px 8px !important;
+  white-space: nowrap;
+}
+
+.logout-btn:hover {
+  background: linear-gradient(180deg, #fca5a5 0%, #f87171 100%) !important;
+}

@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // DJ Elements
   const btnDjLogin = document.getElementById('btn-dj-login');
+  const btnDjLogout = document.getElementById('btn-dj-logout');
   const djLoginSection = document.getElementById('dj-login-section');
   const djControlsSection = document.getElementById('dj-controls-section');
   const btnShowToggle = document.getElementById('btn-show-toggle');
@@ -460,3 +461,35 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 });
+
+// ฟังก์ชันสลับกลับเป็นโหมดผู้ฟังทั่วไป
+  function lockDJControls() {
+    if (djControlsSection) djControlsSection.classList.add('hide');
+    if (djLoginSection) djLoginSection.classList.remove('hide');
+  }
+
+  // ระบบล็อกเอาท์ดีเจ
+  if (btnDjLogout) {
+    btnDjLogout.addEventListener('click', () => {
+      if (confirm("ต้องการออกจากโหมดดีเจใช่หรือไม่?")) {
+        // หากจัดรายการอยู่ ให้จบรายการก่อน
+        if (isShowLive) {
+          socket.emit('dj-end-show');
+        }
+        // ปิดไมค์ถ้าเปิดค้างไว้
+        if (isBroadcastingMic && mediaRecorder) {
+          mediaRecorder.stop();
+          isBroadcastingMic = false;
+          if (btnMic) {
+            btnMic.textContent = "🎙️ เปิดไมค์";
+            btnMic.style.filter = "none";
+          }
+        }
+        
+        localStorage.removeItem('dj_access_key');
+        lockDJControls();
+        alert("ออกจากระบบดีเจเรียบร้อยแล้ว");
+        window.location.reload(); // รีเฟรชเพื่อรีเซ็ต socket connection กลับเป็นผู้ฟังปกติ
+      }
+    });
+  }
