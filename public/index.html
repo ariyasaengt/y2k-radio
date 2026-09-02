@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Y2K Messenger Radio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="desktop-wrap">
+    <aside class="window-pane side-bar">
+      <div class="window-header">
+        <span class="icon-flower">🌸</span>
+        <span class="title">Radio Controller</span>
+        <div class="win-controls"><span>_</span><span>□</span><span class="close">×</span></div>
+      </div>
+      
+      <div class="user-badge">
+        <div class="avatar-box">📻</div>
+        <div class="user-meta">
+          <strong>Station Live</strong>
+          <span class="status-online">● Online</span>
+        </div>
+      </div>
+
+      <div class="section-box">
+        <div class="section-title">Now Playing</div>
+        <div class="now-playing-box">
+          <div id="track-title" class="track-title">รอเริ่มรายการ</div>
+          <div id="track-artist" class="track-sub">-</div>
+        </div>
+        <button id="btn-listen" class="y2k-btn primary-btn">▶ ฟังวิทยุสด</button>
+      </div>
+
+      <div class="section-box">
+        <div class="section-title">Playlist Queue</div>
+        <ul id="playlist-container" class="playlist-list">
+          <li>ไม่มีรายการเพลง</li>
+        </ul>
+      </div>
+
+      <div class="section-box dj-panel">
+        <div class="section-title">DJ Booth (Admin)</div>
+        <div class="dj-controls">
+          <input type="file" id="dj-file-input" accept="audio/*" multiple>
+          <div class="btn-group">
+            <button id="btn-mic" class="y2k-btn">🎙️ เปิดไมค์</button>
+            <button id="btn-play-music" class="y2k-btn">🎵 เปิดเพลงถัดไป</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="window-pane chat-window">
+      <div class="window-header">
+        <span class="icon-bubble">💬</span>
+        <span class="title">Live Chat & Shoutbox</span>
+        <div class="win-controls"><span>_</span><span>□</span><span class="close">×</span></div>
+      </div>
+
+      <div class="chat-tab-bar">
+        <div class="tab active">General Room</div>
+      </div>
+
+      <div id="chat-logs" class="chat-logs"></div>
+
+      <div class="chat-input-area">
+        <div class="chat-toolbar">
+          <span><b>B</b></span> <span><i>I</i></span> <span><u>U</u></span> <span>😊</span> <span>🎨</span>
+        </div>
+        <div class="input-row">
+          <input type="text" id="username" class="y2k-input" placeholder="ชื่อเล่น" style="max-width: 100px;">
+          <input type="text" id="chat-message" class="y2k-input flex-1" placeholder="พิมพ์ข้อความส่งถึงดีเจ...">
+          <button id="btn-send" class="y2k-btn jelly-btn">Send</button>
+        </div>
+      </div>
+      
+      <div class="banner-bottom">
+        <span>Retro Sound Wave 2000 • High Fidelity Stereo</span>
+      </div>
+    </main>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
