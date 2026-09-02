@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let myRole = 'listener';
   let myDJName = '';
+  let isListeningToMain = false; // ตัวควบคุม: จะมีเสียงต่อเมื่อกดปุ่มรับฟังสถานีหลักเท่านั้น
 
   const mainAppWindow = document.getElementById('main-app-window');
   const stationStatus = document.getElementById('station-status');
@@ -155,7 +156,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (isYtReady && ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
       ytPlayer.loadVideoById(videoId);
-      ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
+      
+      // ถ้าผู้ใช้ยังไม่ได้กดปุ่มรับฟังสถานีหลัก ให้ปิดเสียงไว้
+      if (!isListeningToMain) {
+        ytPlayer.mute();
+      } else {
+        ytPlayer.unMute();
+        ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
+      }
       ytPlayer.playVideo();
     } else {
       setTimeout(() => playYouTubeTrack(videoId, title), 800);
@@ -180,7 +188,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return match ? match[1] : null;
   }
 
-  // กดเพิ่ม YouTube เข้าคิว ส่งให้เซิร์ฟเวอร์ดึงชื่อจริง
   if (btnPlayYt) {
     btnPlayYt.addEventListener('click', () => {
       const url = djYtUrl.value.trim();
@@ -206,10 +213,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      if (listenAudioCtx && listenAudioCtx.state === 'running') {
-        listenAudioCtx.suspend();
-        btnListen.textContent = "▶ ฟังสถานีหลัก";
-        btnListen.style.filter = "none";
+      // เมื่อเลือกคลื่นไทย ให้ปิดเสียงสถานีหลักทันที
+      if (isListeningToMain) {
+        stopListeningMainStation();
       }
 
       backupAudioPlayer.pause();
@@ -550,6 +556,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   sfxButtons.forEach(btn => btn.onclick = () => socket.emit('dj-play-sfx', btn.getAttribute('data-sound')));
   socket.on('play-sfx', (type) => {
+    // ซาวด์เอฟเฟกต์จะดังเฉพาะเมื่อผู้ใช้กดรับฟังสถานีหลักเท่านั้น
+    if (!isListeningToMain) return;
+
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = ctx.createOscillator(), gain = ctx.createGain();
@@ -619,7 +628,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (musicGainNode && vols.music !== undefined) musicGainNode.gain.setValueAtTime(vols.music, listenAudioCtx.currentTime);
       if (micGainNode && vols.mic !== undefined) micGainNode.gain.setValueAtTime(vols.mic, listenAudioCtx.currentTime);
     }
-    if (isYtReady && ytPlayer && vols.music !== undefined) ytPlayer.setVolume(Math.round(vols.music * 100));
+    if (isYtReady && ytPlayer && vols.music !== undefined && isListeningToMain) {
+      ytPlayer.setVolume(Math.round(vols.music * 100));
+    }
   });
 
   sliderMusicVol.addEventListener('input', (e) => {
@@ -627,7 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
     labelMusicVol.textContent = `${val}%`;
     socket.emit('dj-volume-change', { type: 'music', volume: val / 100 });
     if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(val / 100, listenAudioCtx.currentTime);
-    if (isYtReady && ytPlayer) ytPlayer.setVolume(val);
+    if (isYtReady && ytPlayer && isListeningToMain) ytPlayer.setVolume(val);
   });
 
   sliderMicVol.addEventListener('input', (e) => {
@@ -643,13 +654,13 @@ document.addEventListener('DOMContentLoaded', () => {
       sliderMusicVol.value = 20; labelMusicVol.textContent = "20%";
       socket.emit('dj-volume-change', { type: 'music', volume: 0.2 });
       if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(0.2, listenAudioCtx.currentTime);
-      if (isYtReady && ytPlayer) ytPlayer.setVolume(20);
+      if (isYtReady && ytPlayer && isListeningToMain) ytPlayer.setVolume(20);
       btnDucking.classList.add('active'); btnDucking.textContent = "🔊 คืนระดับเสียงเดิม"; isDucking = true;
     } else {
       sliderMusicVol.value = previousMusicVol; labelMusicVol.textContent = `${previousMusicVol}%`;
       socket.emit('dj-volume-change', { type: 'music', volume: previousMusicVol / 100 });
       if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(previousMusicVol / 100, listenAudioCtx.currentTime);
-      if (isYtReady && ytPlayer) ytPlayer.setVolume(previousMusicVol);
+      if (isYtReady && ytPlayer && isListeningToMain) ytPlayer.setVolume(previousMusicVol);
       btnDucking.classList.remove('active'); btnDucking.textContent = "🔉 หรี่เพลงพูดไมค์ (Ducking)"; isDucking = false;
     }
   };
@@ -736,19 +747,61 @@ document.addEventListener('DOMContentLoaded', () => {
   chatColor.oninput = (e) => { currentStyle.color = e.target.value; chatInput.style.color = currentStyle.color; };
 
   // ==========================================
-  // ⏱️ Audio Streaming & Playlist Render
+  // ⏱️ Audio Streaming & ควบคุมปุ่มฟังสถานีหลัก
   // ==========================================
   let isBroadcastingMic = false, mediaRecorder = null, trackTimerInterval = null;
   function formatTime(s) { return `${Math.floor(s/60).toString().padStart(2, '0')}:${Math.floor(s%60).toString().padStart(2, '0')}`; }
 
-  btnListen.onclick = async () => {
+  function startListeningMainStation() {
     initAudioContext();
-    if (listenAudioCtx.state === 'suspended') await listenAudioCtx.resume();
-    if (isYtReady && ytPlayer && typeof ytPlayer.playVideo === 'function') ytPlayer.playVideo();
-    btnListen.textContent = "🔊 กำลังรับฟังสด"; btnListen.style.filter = "hue-rotate(90deg)";
+    if (listenAudioCtx.state === 'suspended') {
+      listenAudioCtx.resume();
+    }
+    
+    // ปิดเสียงวิทยุสำรองหากเปิดอยู่
+    if (backupAudioPlayer) {
+      backupAudioPlayer.pause();
+    }
+
+    // ปลด Mute สำหรับ YouTube
+    if (isYtReady && ytPlayer) {
+      ytPlayer.unMute();
+      ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
+    }
+
+    isListeningToMain = true;
+    btnListen.textContent = "🔊 กำลังรับฟังสด";
+    btnListen.style.filter = "hue-rotate(90deg)";
+  }
+
+  function stopListeningMainStation() {
+    if (listenAudioCtx && listenAudioCtx.state === 'running') {
+      listenAudioCtx.suspend();
+    }
+
+    // สั่งปิดเสียง YouTube
+    if (isYtReady && ytPlayer && typeof ytPlayer.mute === 'function') {
+      ytPlayer.mute();
+    }
+
+    isListeningToMain = false;
+    btnListen.textContent = "▶ ฟังสถานีหลัก";
+    btnListen.style.filter = "none";
+  }
+
+  // ปุ่มกดฟังสถานีหลัก (สลับเปิด/ปิดเสียง)
+  btnListen.onclick = () => {
+    if (!isListeningToMain) {
+      startListeningMainStation();
+    } else {
+      stopListeningMainStation();
+    }
   };
 
   socket.on('listener-audio-stream', async (data) => {
+    // ถ้ายังไม่ได้กดปุ่มรับฟังสถานีหลัก จะไม่เล่นเสียง
+    if (!isListeningToMain) return;
+
     initAudioContext();
     if (listenAudioCtx.state === 'suspended') await listenAudioCtx.resume();
     try {
