@@ -1,6 +1,6 @@
 const socket = io();
 
-// ดึง Elements ทั่วไป
+// ดึง Elements
 const chatLogs = document.getElementById('chat-logs');
 const chatInput = document.getElementById('chat-message');
 const usernameInput = document.getElementById('username');
@@ -18,6 +18,13 @@ const djFileInput = document.getElementById('dj-file-input');
 const btnPlayMusic = document.getElementById('btn-play-music');
 const btnMic = document.getElementById('btn-mic');
 
+// Modal Elements
+const djModal = document.getElementById('dj-modal');
+const modalPassInput = document.getElementById('modal-pass-input');
+const modalBtnConfirm = document.getElementById('modal-btn-confirm');
+const modalBtnCancel = document.getElementById('modal-btn-cancel');
+const modalError = document.getElementById('modal-error');
+
 // Toolbar Elements
 const btnBold = document.getElementById('btn-bold');
 const btnItalic = document.getElementById('btn-italic');
@@ -28,13 +35,7 @@ const chatColor = document.getElementById('chat-color');
 
 let currentStyle = { bold: false, italic: false, underline: false, color: '#000000' };
 
-const djModal = document.getElementById('dj-modal');
-const modalPassInput = document.getElementById('modal-pass-input');
-const modalBtnConfirm = document.getElementById('modal-btn-confirm');
-const modalBtnCancel = document.getElementById('modal-btn-cancel');
-const modalError = document.getElementById('modal-error');
-
-// เปิดหน้าต่างใส่รหัส
+// --- ระบบยืนยันตัวตน DJ แบบ Popup ---
 btnDjLogin.addEventListener('click', () => {
   modalPassInput.value = '';
   modalError.classList.add('hide');
@@ -46,8 +47,12 @@ modalBtnCancel.addEventListener('click', () => {
   djModal.classList.add('hide');
 });
 
-// ตรวจสอบรหัสผ่านผ่านกล่อง UI
-modalBtnConfirm.addEventListener('click', () => {
+modalBtnConfirm.addEventListener('click', verifyDJ);
+modalPassInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') verifyDJ();
+});
+
+function verifyDJ() {
   const pass = modalPassInput.value.trim();
   if (!pass) return;
 
@@ -61,7 +66,7 @@ modalBtnConfirm.addEventListener('click', () => {
       modalError.classList.remove('hide');
     }
   });
-});
+}
 
 // --- Toolbar Formatting ---
 btnBold.addEventListener('click', () => {
@@ -102,7 +107,7 @@ chatColor.addEventListener('input', (e) => {
   chatInput.style.color = currentStyle.color;
 });
 
-// --- ระบบส่งข้อความแชท ---
+// --- ระบบส่งแชท ---
 function sendMessage() {
   const text = chatInput.value.trim();
   const user = usernameInput.value.trim() || 'Guest';
@@ -195,7 +200,6 @@ socket.on('playlist-update', (list) => {
   });
 });
 
-// ฝั่งควบคุมของดีเจ
 djFileInput.addEventListener('change', (e) => {
   playlist = Array.from(e.target.files);
   socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name })));

@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="desktop-wrap">
-    <!-- แถบซ้าย: กล่องคุมเพลง & เพลย์ลิสต์ -->
+    <!-- แถบซ้าย: ควบคุมสถานีวิทยุ -->
     <aside class="window-pane side-bar">
       <div class="window-header">
         <span class="icon-flower">🌸</span>
@@ -40,16 +40,13 @@
           </ul>
         </div>
 
-        <!-- กล่องสิทธิ์ดีเจ/แอดมิน -->
         <div class="section-box dj-panel">
           <div class="section-title">DJ Booth (Admin)</div>
           
-          <!-- ปุ่มล็อกอินดีเจ (แสดงให้ทุกคนเห็นตอนแรก) -->
           <div id="dj-login-section">
             <button id="btn-dj-login" class="y2k-btn primary-btn">🔐 เข้าสู่โหมดดีเจ / แอดมิน</button>
           </div>
 
-          <!-- แผงควบคุมออกอากาศ (จะถูกซ่อนไว้จนกว่าจะกรอกรหัสผ่านถูก) -->
           <div id="dj-controls-section" class="dj-controls hide">
             <div class="dj-badge-status">🎧 สิทธิ์: ดีเจออกอากาศ</div>
             <input type="file" id="dj-file-input" accept="audio/*" multiple>
@@ -62,7 +59,7 @@
       </div>
     </aside>
 
-    <!-- แถบขวา: ห้องแชทหลัก -->
+    <!-- แถบขวา: ห้องแชท -->
     <main class="window-pane chat-window">
       <div class="window-header">
         <span class="icon-bubble">💬</span>
@@ -108,10 +105,7 @@
     </main>
   </div>
 
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js"></script>
-
-  <!-- ป๊อปอัปกรอกรหัสดีเจสไตล์ Y2K (ไม่ต้องใช้ prompt ของบราวเซอร์) -->
+  <!-- กล่องป๊อปอัปกรอกรหัสดีเจ -->
   <div id="dj-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -119,7 +113,7 @@
         <span class="title">DJ Authentication</span>
       </div>
       <div class="modal-body">
-        <p>กรุณากรอกรหัสผ่านประจำตัวดีเจ:</p>
+        <p style="margin-bottom: 6px;">กรุณากรอกรหัสผ่านประจำตัวดีเจ:</p>
         <input type="password" id="modal-pass-input" class="y2k-input" placeholder="ใส่รหัสผ่าน...">
         <div id="modal-error" class="error-msg hide">รหัสผ่านไม่ถูกต้อง!</div>
         <div class="modal-actions">
@@ -129,5 +123,8 @@
       </div>
     </div>
   </div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
