@@ -153,7 +153,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 1000);
           }
 
-          // เมื่อคลิปจบ ดีเจ/แอดมิน ดึงเพลงถัดไปจากคิวอัตโนมัติ
           if (e.data === YT.PlayerState.ENDED) {
             if (trackTimerInterval) clearInterval(trackTimerInterval);
             if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
@@ -176,7 +175,6 @@ document.addEventListener('DOMContentLoaded', () => {
         startSeconds: Math.floor(seekTo)
       });
 
-      // สั่งข้ามไปยังวินาทีที่กำหนดซ้ำเพื่อความแม่นยำ
       setTimeout(() => {
         if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
           ytPlayer.seekTo(seekTo, true);
@@ -196,15 +194,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ตัวดักรับ Sync Pulse จากเซิร์ฟเวอร์ทุก 3 วินาที (แก้ปัญหาทุกคนฟังไม่ตรงกัน)
   socket.on('radio-sync-pulse', (data) => {
     if (!isYtReady || !ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
-    
-    // ตรวจสอบว่ากำลังเล่นคลิปเดียวกันหรือไม่
     const currentUrl = ytPlayer.getVideoUrl ? ytPlayer.getVideoUrl() : '';
     if (currentUrl.includes(data.videoId)) {
       const myTime = ytPlayer.getCurrentTime();
-      // หากเวลาในเครื่องคลาดเคลื่อนจากเวลาเซิร์ฟเวอร์เกิน 2.5 วินาที ให้กระโดดไปเวลาจริงทันที
       if (Math.abs(myTime - data.currentTime) > 2.5) {
         ytPlayer.seekTo(data.currentTime, true);
       }
@@ -546,6 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 🔊 Audio & Visualizer & SFX
   // ==========================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
+  let nextMicPlayTime = 0; // ล็อกคิวเสียงไมค์ไม่ให้ขาดช่วง
 
   function initAudioContext() {
     if (!listenAudioCtx) {
@@ -788,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // ⏱️ Audio Streaming & ควบคุมปุ่มฟังสถานีหลัก
   // ==========================================
-  let isBroadcastingMic = false, mediaRecorder = null, trackTimerInterval = null;
+  let trackTimerInterval = null;
   function formatTime(s) { return `${Math.floor(s/60).toString().padStart(2, '0')}:${Math.floor(s%60).toString().padStart(2, '0')}`; }
 
   function startListeningMainStation() {
@@ -805,7 +800,6 @@ document.addEventListener('DOMContentLoaded', () => {
       ytPlayer.unMute();
       ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
       
-      // เมื่อกดเปิดฟัง ให้คำนวณเวลา ณ ปัจจุบันของเซิร์ฟเวอร์ทันที
       if (lastKnownTrack && lastKnownTrack.startedAt) {
         const syncSec = Math.max(0, (Date.now() - lastKnownTrack.startedAt) / 1000);
         ytPlayer.seekTo(syncSec, true);
@@ -839,21 +833,47 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
+  // รับข้อมูลสตรีมเสียง (ทั้ง MP3 และ ไมค์สดแบบ PCM Float32)
   socket.on('listener-audio-stream', async (data) => {
     if (!isListeningToMain) return;
 
     initAudioContext();
     if (listenAudioCtx.state === 'suspended') await listenAudioCtx.resume();
-    try {
-      const bufferData = data.buffer || data;
-      const streamType = data.type || 'mic';
-      const audioBuffer = await listenAudioCtx.decodeAudioData(bufferData.slice(0));
-      const source = listenAudioCtx.createBufferSource();
-      source.buffer = audioBuffer;
 
-      if (streamType === 'music') {
+    // 1. จัดการเสียงไมค์สด (PCM Direct Feed)
+    if (data.type === 'mic' && data.pcmData) {
+      try {
+        const floatData = new Float32Array(data.pcmData);
+        const audioBuffer = listenAudioCtx.createBuffer(1, floatData.length, data.sampleRate || 44100);
+        audioBuffer.copyToChannel(floatData, 0);
+
+        const source = listenAudioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+        source.connect(micGainNode);
+
+        // กำหนดเวลาเล่นต่อเนื่องแบบคิวเสียงเพื่อไม่ให้สะดุด
+        const currentTime = listenAudioCtx.currentTime;
+        if (nextMicPlayTime < currentTime) {
+          nextMicPlayTime = currentTime;
+        }
+        source.start(nextMicPlayTime);
+        nextMicPlayTime += audioBuffer.duration;
+      } catch (err) {
+        console.error("PCM Mic decode error:", err);
+      }
+      return;
+    }
+
+    // 2. จัดการไฟล์เพลง MP3
+    if (data.type === 'music') {
+      try {
+        const bufferData = data.buffer || data;
+        const audioBuffer = await listenAudioCtx.decodeAudioData(bufferData.slice(0));
+        const source = listenAudioCtx.createBufferSource();
+        source.buffer = audioBuffer;
+
         if (currentMusicSource) currentMusicSource.stop();
-        currentMusicSource = source; 
+        currentMusicSource = source;
         source.connect(musicGainNode);
 
         source.onended = () => {
@@ -873,11 +893,12 @@ document.addEventListener('DOMContentLoaded', () => {
           trackProgressFill.style.width = `${Math.min(100, (elapsed / duration) * 100)}%`;
           if (elapsed >= duration) clearInterval(trackTimerInterval);
         }, 1000);
-      } else {
-        source.connect(micGainNode);
+
+        source.start();
+      } catch (e) {
+        console.error("MP3 decode error:", e);
       }
-      source.start();
-    } catch (e) {}
+    }
   });
 
   let lastKnownTrack = null;
@@ -958,20 +979,71 @@ document.addEventListener('DOMContentLoaded', () => {
     playItemAtIndex(0);
   };
 
+  // ========================================================
+  // 🎙️ ไมค์ดีเจ: สตรีมด้วย Web Audio API (PCM Float32 แท้)
+  // ========================================================
+  let micStream = null;
+  let micAudioCtx = null;
+  let micProcessorNode = null;
+  let isBroadcastingMic = false;
+
   btnMic.onclick = async () => {
     if (!isBroadcastingMic) {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        mediaRecorder.ondataavailable = async (e) => {
-          if (e.data.size > 0) socket.emit('dj-audio-stream', { type: 'mic', buffer: await e.data.arrayBuffer() });
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        micAudioCtx = new AudioContext();
+        const micSourceNode = micAudioCtx.createMediaStreamSource(micStream);
+
+        // ดึง Buffer เสียงไมค์ขนาด 4096 ตัวอย่าง แล้วส่งเป็น PCM ทันที
+        micProcessorNode = micAudioCtx.createScriptProcessor(4096, 1, 1);
+
+        micProcessorNode.onaudioprocess = (e) => {
+          if (!isBroadcastingMic) return;
+          const inputData = e.inputBuffer.getChannelData(0);
+          
+          // ส่งเป็น Float32Array ตรงไปยังเซิร์ฟเวอร์
+          socket.emit('dj-audio-stream', {
+            type: 'mic',
+            pcmData: inputData.buffer,
+            sampleRate: micAudioCtx.sampleRate
+          });
         };
-        mediaRecorder.start(400);
-        btnMic.textContent = "🛑 ปิดไมค์"; btnMic.style.filter = "hue-rotate(280deg)"; isBroadcastingMic = true;
-      } catch (err) { alert("ไม่สามารถเข้าถึงไมค์: " + err.message); }
+
+        micSourceNode.connect(micProcessorNode);
+        micProcessorNode.connect(micAudioCtx.destination);
+
+        btnMic.textContent = "🛑 ปิดไมค์";
+        btnMic.style.filter = "hue-rotate(280deg)";
+        isBroadcastingMic = true;
+      } catch (err) {
+        alert("ไม่สามารถเข้าถึงไมโครโฟนได้: " + err.message);
+      }
     } else {
-      if (mediaRecorder) mediaRecorder.stop();
-      btnMic.textContent = "🎙️ เปิดไมค์"; btnMic.style.filter = "none"; isBroadcastingMic = false;
+      // ปิดไมค์และเคลียร์สตรีม
+      if (micProcessorNode) {
+        micProcessorNode.disconnect();
+        micProcessorNode = null;
+      }
+      if (micAudioCtx) {
+        micAudioCtx.close();
+        micAudioCtx = null;
+      }
+      if (micStream) {
+        micStream.getTracks().forEach(track => track.stop());
+        micStream = null;
+      }
+
+      btnMic.textContent = "🎙️ เปิดไมค์";
+      btnMic.style.filter = "none";
+      isBroadcastingMic = false;
     }
   };
 });
