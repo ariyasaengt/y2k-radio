@@ -182,7 +182,6 @@ body {
   margin-bottom: 4px;
 }
 
-/* กรอบจอ Mini YouTube Player สไตล์เรโทร */
 .yt-screen-container {
   width: 100%;
   height: 140px;
@@ -258,9 +257,7 @@ body {
   transition: background 0.15s ease;
 }
 
-.playlist-list li:hover {
-  background: #e0f2fe;
-}
+.playlist-list li:hover { background: #e0f2fe; }
 
 .play-now-pill {
   background: #10b981;
@@ -273,10 +270,7 @@ body {
   cursor: pointer;
   white-space: nowrap;
 }
-
-.play-now-pill:hover {
-  background: #059669;
-}
+.play-now-pill:hover { background: #059669; }
 
 .chat-window { flex: 1; }
 
@@ -417,7 +411,6 @@ body {
   margin-top: 6px;
 }
 
-/* จัดกึ่งกลางตัวเลขในวงเล็บให้ตรงบรรทัด ไม่ลอย */
 .sfx-title {
   font-weight: bold;
   font-size: 11px;
@@ -452,7 +445,6 @@ body {
   color: #1e40af;
   cursor: pointer;
 }
-
 .sfx-btn:active { background: #93c5fd; }
 
 .requests-list {
@@ -593,6 +585,42 @@ body {
   font-size: 13px;
   margin-top: 1px;
   word-break: break-word;
+}
+
+/* ปุ่มจัดการ Moderation ในแชท */
+.mod-action-group {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.mod-btn {
+  font-size: 9px !important;
+  font-weight: bold;
+  padding: 1px 4px !important;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.kick-btn {
+  background: #fef08a !important;
+  color: #854d0e !important;
+  border-color: #ca8a04 !important;
+}
+.kick-btn:hover { background: #fde047 !important; }
+
+.ban-btn {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+  border-color: #ef4444 !important;
+}
+.ban-btn:hover { background: #fca5a5 !important; }
+
+.unban-btn {
+  background: #0284c7 !important;
+  color: white !important;
 }
 
 .chat-input-area {
@@ -736,7 +764,6 @@ body {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px; }
 .error-msg { color: #cc0000; font-size: 11px; font-weight: bold; }
 
-/* ป้องกันปุ่มล้นขอบทั้งหมดใน sidebar */
 .side-bar .input-row {
   display: flex !important;
   gap: 4px !important;

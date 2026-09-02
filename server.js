@@ -8,6 +8,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { maxHttpBufferSize: 1e7 });
 
+app.set('trust proxy', true);
 app.use(express.static(path.join(__dirname, 'public')));
 
 // รหัสผ่าน Super Admin
@@ -26,6 +27,21 @@ let djQueue = [];
 let onlineUsersCount = 0;
 let currentVolumes = { music: 0.8, mic: 1.0 };
 
+// ฐานข้อมูลผู้ใช้ที่ถูกแบน
+const BANNED_FILE = path.join(__dirname, 'banned_users.json');
+let bannedList = [];
+
+function loadBannedList() {
+  try {
+    if (fs.existsSync(BANNED_FILE)) bannedList = JSON.parse(fs.readFileSync(BANNED_FILE, 'utf-8'));
+    else { bannedList = []; saveBannedList(); }
+  } catch (err) { bannedList = []; }
+}
+function saveBannedList() {
+  try { fs.writeFileSync(BANNED_FILE, JSON.stringify(bannedList, null, 2), 'utf-8'); } catch (err) {}
+}
+loadBannedList();
+
 const CHAT_FILE = path.join(__dirname, 'chat_history.json');
 let chatHistory = [];
 
@@ -38,7 +54,6 @@ function loadRegisteredDJs() {
     else { registeredDJs = {}; saveRegisteredDJs(); }
   } catch (err) { registeredDJs = {}; }
 }
-
 function saveRegisteredDJs() {
   try { fs.writeFileSync(DJS_FILE, JSON.stringify(registeredDJs, null, 2), 'utf-8'); } catch (err) {}
 }
@@ -59,7 +74,6 @@ function loadChatHistory() {
     }
   } catch (err) { chatHistory = []; }
 }
-
 function saveChatHistory() {
   try { fs.writeFileSync(CHAT_FILE, JSON.stringify({ savedDay: currentDay, history: chatHistory }, null, 2), 'utf-8'); } catch (err) {}
 }
@@ -78,7 +92,7 @@ function checkDayReset() {
   }
 }
 
-// ⏱️ ระบบส่ง Sync Pulse ทุก 3 วินาที เพื่อล็อกให้ทุกคนฟังตรงท่อนเดียวกันเป๊ะๆ
+// ⏱️ ส่ง Sync Pulse ทุก 3 วินาที เพื่อล็อกตำแหน่งเพลงให้ตรงกันทุกคน
 setInterval(() => {
   if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
     const currentSeconds = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
@@ -89,14 +103,27 @@ setInterval(() => {
   }
 }, 3000);
 
+function getClientIp(socket) {
+  const forwarded = socket.handshake.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return socket.handshake.address || socket.conn.remoteAddress;
+}
+
 io.on('connection', (socket) => {
+  const clientIp = getClientIp(socket);
+
+  if (bannedList.some(b => b.ip === clientIp)) {
+    socket.emit('banned-notice', { reason: "คุณถูกระงับการเข้าใช้งานเนื่องจากทำผิดกฎระเบียบของสถานี" });
+    socket.disconnect(true);
+    return;
+  }
+
   onlineUsersCount++;
   io.emit('online-users-count', onlineUsersCount);
   checkDayReset();
 
   socket.emit('dj-status-update', isDJLive);
 
-  // คำนวณตำแหน่งวินาทีปัจจุบันส่งให้คนที่เพิ่งเปิดเข้ามา
   let trackToSend = { ...currentTrack };
   if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
     trackToSend.seekTo = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
@@ -121,6 +148,8 @@ io.on('connection', (socket) => {
   socket.on('chat-message', (data) => {
     checkDayReset();
     const newMsg = {
+      id: Date.now() + Math.random().toString(36).substring(2, 5),
+      senderSocketId: socket.id,
       user: data.user || 'Guest',
       status: data.status || '',
       text: data.text,
@@ -131,6 +160,53 @@ io.on('connection', (socket) => {
     chatHistory.push(newMsg);
     saveChatHistory();
     io.emit('chat-message', newMsg);
+  });
+
+  // ----------------------------------------------------
+  // 🔨 ระบบเตะ (Kick) และ แบน (Ban)
+  // ----------------------------------------------------
+  socket.on('admin-kick-user', (targetSocketId) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    const target = io.sockets.sockets.get(targetSocketId);
+    if (target) {
+      if (target.userRole === 'admin') return;
+      target.emit('kicked-notice', { reason: "คุณถูกเตะออกจากห้องสนทนาโดยผู้ดูแลระบบ" });
+      target.disconnect(true);
+      io.emit('system-announcement', `👢 สมาชิกคนหนึ่งถูกเชิญออกจากห้องสนทนา`);
+    }
+  });
+
+  socket.on('admin-ban-user', (targetSocketId) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    const target = io.sockets.sockets.get(targetSocketId);
+    if (target) {
+      if (target.userRole === 'admin') return;
+      const targetIp = getClientIp(target);
+      const targetName = target.djName || 'Guest';
+
+      if (!bannedList.some(b => b.ip === targetIp)) {
+        bannedList.push({
+          ip: targetIp,
+          username: targetName,
+          reason: "ถูกระงับสิทธิ์การใช้งานโดยผู้ดูแลระบบ",
+          bannedAt: new Date().toLocaleString()
+        });
+        saveBannedList();
+      }
+
+      target.emit('banned-notice', { reason: "คุณถูกแบนออกจากระบบอย่างถาวรเนื่องจากสร้างความปั่นป่วน" });
+      target.disconnect(true);
+      io.emit('system-announcement', `🚫 [ระบบ] ผู้ใช้ "${targetName}" ถูกแบนออกจากสถานี`);
+
+      if (adminSocketId) io.to(adminSocketId).emit('admin-banned-list-update', bannedList);
+    }
+  });
+
+  socket.on('admin-unban-ip', (ipToUnban) => {
+    if (socket.userRole !== 'admin') return;
+    bannedList = bannedList.filter(b => b.ip !== ipToUnban);
+    saveBannedList();
+    socket.emit('admin-banned-list-update', bannedList);
   });
 
   socket.on('dj-register', (data, callback) => {
@@ -158,6 +234,7 @@ io.on('connection', (socket) => {
       callback({ success: true, role: 'admin', name: socket.djName });
       socket.emit('admin-dj-queue-update', djQueue);
       socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
+      socket.emit('admin-banned-list-update', bannedList);
       return;
     }
 

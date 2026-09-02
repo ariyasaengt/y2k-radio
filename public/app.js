@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let myRole = 'listener';
   let myDJName = '';
-  let isListeningToMain = false; // มีเสียงเมื่อกดปุ่มรับฟังสถานีหลักเท่านั้น
+  let isListeningToMain = false;
 
   const mainAppWindow = document.getElementById('main-app-window');
   const stationStatus = document.getElementById('station-status');
@@ -49,6 +49,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminRegisteredDjsBox = document.getElementById('admin-registered-djs-box');
   const registeredDjsList = document.getElementById('registered-djs-list');
   const regDjCount = document.getElementById('reg-dj-count');
+
+  const adminBannedUsersBox = document.getElementById('admin-banned-users-box');
+  const bannedUsersList = document.getElementById('banned-users-list');
+  const banUserCount = document.getElementById('ban-user-count');
 
   const btnShowToggle = document.getElementById('btn-show-toggle');
   const djBroadcastTools = document.getElementById('dj-broadcast-tools');
@@ -112,6 +116,33 @@ document.addEventListener('DOMContentLoaded', () => {
   let isDucking = false;
   let previousMusicVol = 80;
   let playlist = [];
+
+  // ----------------------------------------------------
+  // 🔨 ดักรับเหตุการณ์ถูกเตะ หรือ ถูกแบน
+  // ----------------------------------------------------
+  socket.on('kicked-notice', (data) => {
+    alert(`⚠️ ${data.reason}`);
+    window.location.reload();
+  });
+
+  socket.on('banned-notice', (data) => {
+    document.body.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#0000aa;color:#fff;font-family:monospace;padding:20px;text-align:center;">
+        <h1 style="font-size:32px;background:#fff;color:#0000aa;padding:4px 10px;margin-bottom:20px;">*** SYSTEM HALTED ***</h1>
+        <p style="font-size:18px;margin-bottom:10px;">คุณถูกแบนและระงับการเข้าถึงสถานีวิทยุแห่งนี้</p>
+        <p style="color:#ffff55;font-size:14px;">เหตุผล: ${data.reason}</p>
+        <p style="font-size:12px;margin-top:30px;color:#aaa;">Error Code: BANNED_BY_MODERATOR_0x0000000F</p>
+      </div>
+    `;
+  });
+
+  socket.on('system-announcement', (msg) => {
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = `<div style="color:#d97706;font-size:11px;font-weight:bold;text-align:center;padding:4px;background:#fffbeb;border-radius:3px;">${msg}</div>`;
+    chatLogs.appendChild(bubble);
+    chatLogs.scrollTop = chatLogs.scrollHeight;
+  });
 
   // ==========================================
   // 🎥 YouTube IFrame Player (ระบบ Sync ล็อกเวลา)
@@ -248,18 +279,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      if (isListeningToMain) {
-        stopListeningMainStation();
-      }
+      if (isListeningToMain) stopListeningMainStation();
 
       backupAudioPlayer.pause();
       backupAudioPlayer.src = streamUrl;
       backupAudioPlayer.load();
 
       const playPromise = backupAudioPlayer.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {});
-      }
+      if (playPromise !== undefined) playPromise.catch(() => {});
     });
   }
 
@@ -332,6 +359,7 @@ document.addEventListener('DOMContentLoaded', () => {
           roleBadge.style.borderColor = "#ef4444";
           adminApprovalPanel.classList.remove('hide');
           if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.remove('hide');
+          if (adminBannedUsersBox) adminBannedUsersBox.classList.remove('hide');
         } else if (res.role === 'dj_member') {
           djLoginSection.classList.add('hide');
           djPortalSection.classList.remove('hide');
@@ -363,6 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
             roleBadge.style.borderColor = "#ef4444";
             adminApprovalPanel.classList.remove('hide');
             if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.remove('hide');
+            if (adminBannedUsersBox) adminBannedUsersBox.classList.remove('hide');
           } else if (res.role === 'dj_member') {
             djLoginSection.classList.add('hide');
             djPortalSection.classList.remove('hide');
@@ -432,6 +461,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const target = btn.getAttribute('data-name');
         if (confirm(`ต้องการลบบัญชีดีเจ "${target}" ออกจากระบบใช่หรือไม่?`)) {
           socket.emit('admin-delete-dj', target);
+        }
+      };
+    });
+  });
+
+  socket.on('admin-banned-list-update', (bList) => {
+    if (myRole !== 'admin' || !bannedUsersList) return;
+    banUserCount.textContent = bList.length;
+    bannedUsersList.innerHTML = '';
+    if (bList.length === 0) {
+      bannedUsersList.innerHTML = '<li>ไม่มีรายชื่อถูกแบน</li>';
+      return;
+    }
+    bList.forEach(item => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div><strong>${item.username}</strong><br><span style="font-size:10px;color:#888;">IP: ${item.ip} (${item.bannedAt})</span></div>
+        <button class="accept-req-btn unban-btn" data-ip="${item.ip}">ปลดแบน</button>
+      `;
+      bannedUsersList.appendChild(li);
+    });
+    bannedUsersList.querySelectorAll('.unban-btn').forEach(b => {
+      b.onclick = () => {
+        const ip = b.getAttribute('data-ip');
+        if (confirm(`ต้องการปลดแบน IP "${ip}" หรือไม่?`)) {
+          socket.emit('admin-unban-ip', ip);
         }
       };
     });
@@ -540,7 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 🔊 Audio & Visualizer & SFX
   // ==========================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
-  let nextMicPlayTime = 0; // ล็อกคิวเสียงไมค์ไม่ให้ขาดช่วง
+  let nextMicPlayTime = 0;
 
   function initAudioContext() {
     if (!listenAudioCtx) {
@@ -721,7 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ==========================================
-  // 💬 แชท
+  // 💬 แชท & Moderation Tools (เตะ/แบน)
   // ==========================================
   let typingTimeout = null;
   chatInput.addEventListener('input', () => {
@@ -739,16 +794,49 @@ document.addEventListener('DOMContentLoaded', () => {
     if (data.role === 'admin') roleTag = `<span class="role-badge-admin">👑 Super Admin</span>`;
     else if (data.role === 'dj') roleTag = `<span class="role-badge-dj">🎧 On-Air DJ</span>`;
 
+    let modButtons = '';
+    if ((myRole === 'admin' || myRole === 'dj') && data.senderSocketId && data.role !== 'admin' && data.senderSocketId !== socket.id) {
+      modButtons = `
+        <span class="mod-action-group">
+          <button class="mod-btn kick-btn" data-sid="${data.senderSocketId}" title="เตะออกจากห้อง">เตะ</button>
+          <button class="mod-btn ban-btn" data-sid="${data.senderSocketId}" title="แบนผู้ใช้นี้อย่างถาวร">แบน</button>
+        </span>
+      `;
+    }
+
     const statusHTML = data.status ? `<span class="msn-status-tag">(${data.status})</span>` : '';
     bubble.innerHTML = `
       <div class="meta">
-        <span class="user-name">${data.user}</span>${statusHTML}${roleTag}
+        <span class="user-name">${data.user}</span>${statusHTML}${roleTag}${modButtons}
         <span style="font-weight:normal;color:#888;font-size:11px;">(${data.time})</span>:
       </div>
       <div class="text" style="color: ${s.color || '#000'} !important; font-weight: ${s.bold ? 'bold' : 'normal'} !important; font-style: ${s.italic ? 'italic' : 'normal'} !important; text-decoration: ${s.underline ? 'underline' : 'none'} !important;">
         ${data.text}
       </div>
     `;
+
+    const btnKick = bubble.querySelector('.kick-btn');
+    if (btnKick) {
+      btnKick.onclick = (e) => {
+        e.stopPropagation();
+        const sid = btnKick.getAttribute('data-sid');
+        if (confirm(`ต้องการเตะคุณ "${data.user}" ออกจากห้องใช่หรือไม่?`)) {
+          socket.emit('admin-kick-user', sid);
+        }
+      };
+    }
+
+    const btnBan = bubble.querySelector('.ban-btn');
+    if (btnBan) {
+      btnBan.onclick = (e) => {
+        e.stopPropagation();
+        const sid = btnBan.getAttribute('data-sid');
+        if (confirm(`ต้องการแบน IP ของ "${data.user}" ถาวรใช่หรือไม่?`)) {
+          socket.emit('admin-ban-user', sid);
+        }
+      };
+    }
+
     chatLogs.appendChild(bubble);
   }
 
@@ -788,18 +876,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startListeningMainStation() {
     initAudioContext();
-    if (listenAudioCtx.state === 'suspended') {
-      listenAudioCtx.resume();
-    }
-
-    if (backupAudioPlayer) {
-      backupAudioPlayer.pause();
-    }
+    if (listenAudioCtx.state === 'suspended') listenAudioCtx.resume();
+    if (backupAudioPlayer) backupAudioPlayer.pause();
 
     if (isYtReady && ytPlayer) {
       ytPlayer.unMute();
       ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
-      
       if (lastKnownTrack && lastKnownTrack.startedAt) {
         const syncSec = Math.max(0, (Date.now() - lastKnownTrack.startedAt) / 1000);
         ytPlayer.seekTo(syncSec, true);
@@ -812,13 +894,8 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function stopListeningMainStation() {
-    if (listenAudioCtx && listenAudioCtx.state === 'running') {
-      listenAudioCtx.suspend();
-    }
-
-    if (isYtReady && ytPlayer && typeof ytPlayer.mute === 'function') {
-      ytPlayer.mute();
-    }
+    if (listenAudioCtx && listenAudioCtx.state === 'running') listenAudioCtx.suspend();
+    if (isYtReady && ytPlayer && typeof ytPlayer.mute === 'function') ytPlayer.mute();
 
     isListeningToMain = false;
     btnListen.textContent = "▶ ฟังสถานีหลัก";
@@ -826,21 +903,17 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   btnListen.onclick = () => {
-    if (!isListeningToMain) {
-      startListeningMainStation();
-    } else {
-      stopListeningMainStation();
-    }
+    if (!isListeningToMain) startListeningMainStation();
+    else stopListeningMainStation();
   };
 
-  // รับข้อมูลสตรีมเสียง (ทั้ง MP3 และ ไมค์สดแบบ PCM Float32)
   socket.on('listener-audio-stream', async (data) => {
     if (!isListeningToMain) return;
 
     initAudioContext();
     if (listenAudioCtx.state === 'suspended') await listenAudioCtx.resume();
 
-    // 1. จัดการเสียงไมค์สด (PCM Direct Feed)
+    // 1. เสียงไมค์สด PCM Float32
     if (data.type === 'mic' && data.pcmData) {
       try {
         const floatData = new Float32Array(data.pcmData);
@@ -851,11 +924,8 @@ document.addEventListener('DOMContentLoaded', () => {
         source.buffer = audioBuffer;
         source.connect(micGainNode);
 
-        // กำหนดเวลาเล่นต่อเนื่องแบบคิวเสียงเพื่อไม่ให้สะดุด
         const currentTime = listenAudioCtx.currentTime;
-        if (nextMicPlayTime < currentTime) {
-          nextMicPlayTime = currentTime;
-        }
+        if (nextMicPlayTime < currentTime) nextMicPlayTime = currentTime;
         source.start(nextMicPlayTime);
         nextMicPlayTime += audioBuffer.duration;
       } catch (err) {
@@ -864,7 +934,7 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // 2. จัดการไฟล์เพลง MP3
+    // 2. ไฟล์เพลง MP3
     if (data.type === 'music') {
       try {
         const bufferData = data.buffer || data;
@@ -1002,14 +1072,10 @@ document.addEventListener('DOMContentLoaded', () => {
         micAudioCtx = new AudioContext();
         const micSourceNode = micAudioCtx.createMediaStreamSource(micStream);
 
-        // ดึง Buffer เสียงไมค์ขนาด 4096 ตัวอย่าง แล้วส่งเป็น PCM ทันที
         micProcessorNode = micAudioCtx.createScriptProcessor(4096, 1, 1);
-
         micProcessorNode.onaudioprocess = (e) => {
           if (!isBroadcastingMic) return;
           const inputData = e.inputBuffer.getChannelData(0);
-          
-          // ส่งเป็น Float32Array ตรงไปยังเซิร์ฟเวอร์
           socket.emit('dj-audio-stream', {
             type: 'mic',
             pcmData: inputData.buffer,
@@ -1027,7 +1093,6 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("ไม่สามารถเข้าถึงไมโครโฟนได้: " + err.message);
       }
     } else {
-      // ปิดไมค์และเคลียร์สตรีม
       if (micProcessorNode) {
         micProcessorNode.disconnect();
         micProcessorNode = null;
