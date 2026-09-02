@@ -718,3 +718,18 @@ body {
   #username, #userstatus { width: 100% !important; }
   #btn-send { width: 70px; }
 }
+
+/* จัดระดับตัวเลขในวงเล็บและหัวข้อกล่องให้อยู่ตรงกลางบรรทัดเท่ากัน */
+.sfx-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px;
+  line-height: 1.2 !important;
+}
+
+.sfx-title span {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  line-height: normal;
+}
