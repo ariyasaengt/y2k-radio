@@ -11,6 +11,7 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// รหัสผ่านยืนยันสิทธิ์ดีเจ / แอดมิน
 const DJ_SECRET_KEY = "1234";
 
 let isDJLive = false;
@@ -21,7 +22,10 @@ let playlist = [];
 let chatHistory = [];
 let currentDay = new Date().toLocaleDateString('th-TH');
 
-// บันทึกระดับเสียงเริ่มต้น
+// ตัวแปรนับจำนวนคนออนไลน์แบบเรียลไทม์
+let onlineUsersCount = 0;
+
+// ระดับเสียงเริ่มต้น (0.0 ถึง 1.0)
 let currentVolumes = { music: 0.8, mic: 1.0 };
 
 function checkDayReset() {
@@ -36,8 +40,13 @@ function checkDayReset() {
 }
 
 io.on('connection', (socket) => {
+  // เมื่อมีผู้ใช้งานเชื่อมต่อเข้ามาใหม่
+  onlineUsersCount++;
+  io.emit('online-users-count', onlineUsersCount);
+
   checkDayReset();
 
+  // ส่งสถานะเริ่มต้นทั้งหมดให้ผู้ใช้งานที่เพิ่งเปิดหน้าเว็บ
   socket.emit('dj-status-update', isDJLive);
   socket.emit('track-update', currentTrack);
   socket.emit('topic-update', todayTopic);
@@ -45,6 +54,7 @@ io.on('connection', (socket) => {
   socket.emit('playlist-update', playlist);
   socket.emit('chat-history', chatHistory);
 
+  // ระบบส่งข้อความแชท
   socket.on('chat-message', (data) => {
     checkDayReset();
     const newMsg = {
@@ -58,6 +68,16 @@ io.on('connection', (socket) => {
     io.emit('chat-message', newMsg);
   });
 
+  // ระบบแจ้งเตือนใครกำลังพิมพ์
+  socket.on('typing-start', (username) => {
+    socket.broadcast.emit('user-typing', { user: username || 'Guest', isTyping: true });
+  });
+
+  socket.on('typing-stop', () => {
+    socket.broadcast.emit('user-typing', { isTyping: false });
+  });
+
+  // ยืนยันตัวตนดีเจ
   socket.on('dj-auth', (key, callback) => {
     if (key === DJ_SECRET_KEY) {
       socket.isDJ = true;
@@ -68,13 +88,14 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ตั้งหัวข้อประจำวัน
   socket.on('dj-set-topic', (newTopic) => {
     if (!socket.isDJ) return;
     todayTopic = newTopic.trim() || "เปิดเพลงสบายๆ สไตล์ Y2K";
     io.emit('topic-update', todayTopic);
   });
 
-  // ปรับระดับเสียงจากดีเจแบบ Real-time
+  // ปรับระดับเสียงแบบเรียลไทม์
   socket.on('dj-volume-change', (data) => {
     if (!socket.isDJ) return;
     if (data.type === 'music') currentVolumes.music = data.volume;
@@ -82,12 +103,14 @@ io.on('connection', (socket) => {
     io.emit('volume-update', currentVolumes);
   });
 
+  // ดีเจเริ่มจัดรายการ
   socket.on('dj-start-show', () => {
     if (!socket.isDJ) return;
     isDJLive = true;
     io.emit('dj-status-update', true);
   });
 
+  // ดีเจจบรายการ
   socket.on('dj-end-show', () => {
     if (!socket.isDJ) return;
     isDJLive = false;
@@ -108,13 +131,16 @@ io.on('connection', (socket) => {
     io.emit('playlist-update', playlist);
   });
 
-  // ส่งสัญญาณเสียง (รองรับทั้งเพลงและไมค์)
   socket.on('dj-audio-stream', (data) => {
     if (!socket.isDJ || !isDJLive) return;
     socket.broadcast.emit('listener-audio-stream', data);
   });
 
+  // เมื่อผู้ใช้งานปิดเว็บหรือตัดการเชื่อมต่อ
   socket.on('disconnect', () => {
+    onlineUsersCount = Math.max(0, onlineUsersCount - 1);
+    io.emit('online-users-count', onlineUsersCount);
+
     if (socket.isDJ) {
       activeDJSockets.delete(socket.id);
       if (activeDJSockets.size === 0 && isDJLive) {
@@ -124,16 +150,6 @@ io.on('connection', (socket) => {
         io.emit('track-update', currentTrack);
       }
     }
-  });
-
-  // รับสัญญาณเริ่มพิมพ์ข้อความ
-  socket.on('typing-start', (username) => {
-    socket.broadcast.emit('user-typing', { user: username || 'Guest', isTyping: true });
-  });
-
-  // รับสัญญาณหยุดพิมพ์ข้อความ
-  socket.on('typing-stop', () => {
-    socket.broadcast.emit('user-typing', { isTyping: false });
   });
 });
 

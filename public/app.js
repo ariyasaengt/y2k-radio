@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const socket = io();
 
   const stationStatus = document.getElementById('station-status');
+  const onlineUsersBadge = document.getElementById('online-users-badge');
   const chatLogs = document.getElementById('chat-logs');
   const chatInput = document.getElementById('chat-message');
   const usernameInput = document.getElementById('username');
@@ -70,7 +71,6 @@ document.addEventListener('DOMContentLoaded', () => {
       osc.frequency.setValueAtTime(800, ctx.currentTime);
       osc.frequency.exponentialRampToValueAtTime(1050, ctx.currentTime + 0.08);
 
-      // ความดังเบาๆ ระดับ 12% ไม่รบกวนเพลง
       gain.gain.setValueAtTime(0.12, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
 
@@ -80,11 +80,18 @@ document.addEventListener('DOMContentLoaded', () => {
       osc.start();
       osc.stop(ctx.currentTime + 0.16);
     } catch (e) {
-      // ข้ามกรณีที่เบราว์เซอร์ยังบล็อก AudioContext ก่อนการคลิกครั้งแรก
+      // ข้ามกรณีเบราว์เซอร์ยังบล็อก
     }
   }
 
-  // --- Web Audio Context & GainNodes (ควบคุมเสียงแยก) ---
+  // --- รับจำนวนคนออนไลน์แบบเรียลไทม์ ---
+  socket.on('online-users-count', (count) => {
+    if (onlineUsersBadge) {
+      onlineUsersBadge.textContent = `👥 ${count} คน`;
+    }
+  });
+
+  // --- Web Audio Context & GainNodes ---
   let listenAudioCtx = null;
   let musicGainNode = null;
   let micGainNode = null;
@@ -363,8 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.on('chat-message', (data) => {
     renderMessage(data);
     chatLogs.scrollTop = chatLogs.scrollHeight;
-    
-    // เล่นเสียงเตือนเบาๆ เมื่อมีข้อความใหม่เข้ามา
     playNotificationSound();
   });
 

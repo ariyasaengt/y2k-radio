@@ -15,10 +15,14 @@
         <span class="title">Radio Controller</span>
       </div>
       
+      <!-- ป้ายสถานะสถานีหลักและจำนวนคนออนไลน์ -->
       <div class="user-badge">
         <div class="avatar-box">📻</div>
         <div class="user-meta">
-          <strong>Station Main Live</strong>
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <strong>Station Main Live</strong>
+            <span id="online-users-badge" class="online-users-pill">👥 1 คน</span>
+          </div>
           <span id="station-status" class="status-offline">○ Offline</span>
         </div>
       </div>
@@ -145,7 +149,7 @@
 
       <div id="chat-logs" class="chat-logs"></div>
 
-      <!-- โครงสร้างกล่องพิมพ์แชทที่จัดแถวถูกต้อง -->
+      <!-- กล่องพิมพ์แชท -->
       <div class="chat-input-area">
         <div id="typing-indicator" class="typing-status hide"></div>
 
@@ -201,6 +205,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
