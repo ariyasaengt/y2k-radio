@@ -14,10 +14,10 @@
   z-index: 99999;
 }
 
-.heart-container {
+.heart-container, .gift-fly-container {
   position: fixed;
   bottom: 20px; right: 25px;
-  width: 100px; height: 300px;
+  width: 120px; height: 350px;
   pointer-events: none;
   overflow: visible;
   z-index: 99998;
@@ -31,10 +31,37 @@
   user-select: none;
 }
 
+.floating-gift-item {
+  position: absolute;
+  bottom: 0; right: 10px;
+  font-size: 28px;
+  animation: floatUpGift 3s ease-out forwards;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gift-sender-label {
+  background: rgba(0,0,0,0.7);
+  color: #fef08a;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
 @keyframes floatUp {
   0% { transform: translateY(0) scale(0.6) rotate(0deg); opacity: 1; }
   50% { transform: translateY(-120px) scale(1.2) rotate(-15deg); opacity: 0.9; }
   100% { transform: translateY(-260px) scale(1) rotate(15deg); opacity: 0; }
+}
+
+@keyframes floatUpGift {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  15% { transform: translateY(-30px) scale(1.2); opacity: 1; }
+  80% { transform: translateY(-200px) scale(1); opacity: 0.9; }
+  100% { transform: translateY(-280px) scale(0.8); opacity: 0; }
 }
 
 body {
@@ -55,9 +82,7 @@ body {
   transition: transform 0.05s ease;
 }
 
-.nudge-shake {
-  animation: msnShake 0.45s ease-in-out;
-}
+.nudge-shake { animation: msnShake 0.45s ease-in-out; }
 
 @keyframes msnShake {
   0% { transform: translate(0, 0) rotate(0deg); }
@@ -91,10 +116,7 @@ body {
   user-select: none;
 }
 
-.side-bar {
-  width: 320px;
-  flex-shrink: 0;
-}
+.side-bar { width: 320px; flex-shrink: 0; }
 
 .user-badge {
   display: flex;
@@ -116,11 +138,7 @@ body {
   font-size: 18px;
 }
 
-.user-meta {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
+.user-meta { display: flex; flex-direction: column; flex: 1; }
 
 .online-users-pill {
   background: #2563eb;
@@ -233,19 +251,34 @@ body {
   display: block;
 }
 
-.playlist-section {
-  flex: 1;
-  min-height: 80px;
-  overflow-y: auto;
-}
-
-.playlist-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
+/* ของขวัญเสมือน */
+.gift-btn-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 4px;
 }
+.gift-btn {
+  background: linear-gradient(180deg, #fef9c3 0%, #fef08a 100%);
+  border: 1px solid #eab308;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 4px 2px;
+  cursor: pointer;
+  color: #713f12;
+}
+.gift-btn:active { background: #fde047; }
 
+/* อัดรายการ */
+.recorder-box {
+  background: #f0fdf4;
+  border: 1px dashed #4ade80;
+  border-radius: 4px;
+  padding: 6px;
+}
+
+.playlist-section { flex: 1; min-height: 80px; overflow-y: auto; }
+.playlist-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .playlist-list li {
   padding: 4px 6px;
   background: #f0f5fa;
@@ -256,7 +289,6 @@ body {
   align-items: center;
   transition: background 0.15s ease;
 }
-
 .playlist-list li:hover { background: #e0f2fe; }
 
 .play-now-pill {
@@ -429,12 +461,7 @@ body {
   line-height: normal;
 }
 
-.sfx-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-
+.sfx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .sfx-btn {
   background: linear-gradient(180deg, #ffffff 0%, #dbeafe 100%);
   border: 1px solid #93c5fd;
@@ -455,7 +482,6 @@ body {
   flex-direction: column;
   gap: 4px;
 }
-
 .requests-list li {
   background: #fff;
   border: 1px solid #bfdbfe;
@@ -477,11 +503,7 @@ body {
   padding: 2px 6px;
   cursor: pointer;
 }
-
-.reject-btn {
-  background: #ef4444 !important;
-  margin-left: 3px;
-}
+.reject-btn { background: #ef4444 !important; margin-left: 3px; }
 
 .mixer-box {
   background: #e6f0fa;
@@ -506,20 +528,6 @@ body {
 .slider-header { display: flex; justify-content: space-between; font-size: 11px; color: #333; }
 .vol-badge { font-weight: bold; color: #0284c7; }
 .y2k-range { width: 100%; accent-color: #0284c7; cursor: pointer; height: 5px; }
-
-.ducking-btn {
-  font-size: 11px !important;
-  padding: 4px !important;
-  background: linear-gradient(180deg, #e0f2fe 0%, #bae6fd 100%) !important;
-  color: #0369a1 !important;
-  border: 1px solid #7dd3fc !important;
-}
-
-.ducking-btn.active {
-  background: linear-gradient(180deg, #bae6fd 0%, #38bdf8 100%) !important;
-  color: #0c4a6e !important;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2) !important;
-}
 
 .chat-tab-bar {
   background: #cfdef1;
@@ -549,7 +557,9 @@ body {
 }
 
 .chat-bubble { padding: 3px 0; }
-.chat-bubble .meta { color: #0055ea; font-weight: bold; font-size: 11px; }
+.chat-bubble .meta { color: #0055ea; font-weight: bold; font-size: 11px; display: flex; align-items: center; flex-wrap: wrap; gap: 3px; }
+
+.presence-dot { font-size: 9px; vertical-align: middle; }
 
 .role-badge-admin {
   background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
@@ -559,7 +569,6 @@ body {
   font-weight: bold;
   padding: 1px 5px;
   border-radius: 4px;
-  margin-left: 4px;
 }
 
 .role-badge-dj {
@@ -570,7 +579,6 @@ body {
   font-weight: bold;
   padding: 1px 5px;
   border-radius: 4px;
-  margin-left: 4px;
 }
 
 .msn-status-tag {
@@ -578,7 +586,6 @@ body {
   font-style: italic;
   font-weight: normal;
   font-size: 10px;
-  margin-left: 4px;
 }
 
 .chat-bubble .text {
@@ -587,14 +594,23 @@ body {
   word-break: break-word;
 }
 
-/* ปุ่มจัดการ Moderation ในแชท */
-.mod-action-group {
+/* MSN Animated Emoticon Badge */
+.msn-emoticon {
   display: inline-flex;
-  gap: 2px;
-  margin-left: 6px;
-  vertical-align: middle;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  vertical-align: -2px;
+  animation: bounceEmote 1.2s infinite ease-in-out;
 }
 
+@keyframes bounceEmote {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px) scale(1.1); }
+}
+
+.mod-action-group { display: inline-flex; gap: 2px; margin-left: 4px; }
 .mod-btn {
   font-size: 9px !important;
   font-weight: bold;
@@ -603,25 +619,9 @@ body {
   cursor: pointer;
   border: 1px solid transparent;
 }
-
-.kick-btn {
-  background: #fef08a !important;
-  color: #854d0e !important;
-  border-color: #ca8a04 !important;
-}
-.kick-btn:hover { background: #fde047 !important; }
-
-.ban-btn {
-  background: #fee2e2 !important;
-  color: #991b1b !important;
-  border-color: #ef4444 !important;
-}
-.ban-btn:hover { background: #fca5a5 !important; }
-
-.unban-btn {
-  background: #0284c7 !important;
-  color: white !important;
-}
+.kick-btn { background: #fef08a !important; color: #854d0e !important; border-color: #ca8a04 !important; }
+.ban-btn { background: #fee2e2 !important; color: #991b1b !important; border-color: #ef4444 !important; }
+.unban-btn { background: #0284c7 !important; color: white !important; }
 
 .chat-input-area {
   background: #f1f4f9;
@@ -637,7 +637,6 @@ body {
   min-height: 18px;
   animation: pulseTyping 1.2s infinite ease-in-out;
 }
-
 @keyframes pulseTyping { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
 
 .chat-toolbar { display: flex; gap: 4px; margin-bottom: 6px; align-items: center; }
@@ -678,7 +677,7 @@ body {
   font-size: 16px;
   z-index: 100;
 }
-.emoji-picker span { cursor: pointer; }
+.emoji-picker span { cursor: pointer; text-align: center; }
 .color-picker-label { cursor: pointer; }
 .color-picker-label input { opacity: 0; width: 0; height: 0; position: absolute; }
 
@@ -694,7 +693,6 @@ body {
 .y2k-input:focus { border-color: #2563eb; box-shadow: 0 0 4px #93c5fd; }
 
 .y2k-select {
-  width: 100%;
   border: 1px solid #93c5fd;
   border-radius: 5px;
   padding: 4px;
@@ -770,22 +768,9 @@ body {
   width: 100% !important;
   max-width: 100% !important;
 }
-
-.side-bar .input-row input {
-  min-width: 0 !important;
-  width: 100% !important;
-}
-
-.side-bar .input-row .y2k-btn {
-  flex-shrink: 0 !important;
-  padding: 4px 6px !important;
-  font-size: 11px !important;
-  white-space: nowrap !important;
-}
-
-.yt-play-btn {
-  padding: 4px 8px !important;
-}
+.side-bar .input-row input { min-width: 0 !important; width: 100% !important; }
+.side-bar .input-row .y2k-btn { flex-shrink: 0 !important; padding: 4px 6px !important; font-size: 11px !important; white-space: nowrap !important; }
+.yt-play-btn { padding: 4px 8px !important; }
 
 @media (max-width: 768px) {
   body { height: auto !important; min-height: 100vh; overflow-y: auto !important; padding: 6px !important; display: block !important; }

@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const chatInput = document.getElementById('chat-message');
   const usernameInput = document.getElementById('username');
   const userstatusInput = document.getElementById('userstatus');
+  const msnPresenceSelect = document.getElementById('msn-presence-select');
+  const chkMsnSound = document.getElementById('chk-msn-sound');
   const btnSend = document.getElementById('btn-send');
   const trackTitle = document.getElementById('track-title');
   const trackArtist = document.getElementById('track-artist');
@@ -27,6 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const backupStationSelect = document.getElementById('backup-station-select');
   const backupAudioPlayer = document.getElementById('backup-audio-player');
+  const giftButtons = document.querySelectorAll('.gift-btn');
+  const giftFlyContainer = document.getElementById('gift-fly-container');
 
   // สิทธิ์ / Portal / แผงดีเจ
   const btnOpenLoginModal = document.getElementById('btn-open-login-modal');
@@ -53,6 +57,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminBannedUsersBox = document.getElementById('admin-banned-users-box');
   const bannedUsersList = document.getElementById('banned-users-list');
   const banUserCount = document.getElementById('ban-user-count');
+
+  const btnRecordShow = document.getElementById('btn-record-show');
+  const btnDownloadRecord = document.getElementById('btn-download-record');
+  const chkAutoDucking = document.getElementById('chk-auto-ducking');
 
   const btnShowToggle = document.getElementById('btn-show-toggle');
   const djBroadcastTools = document.getElementById('dj-broadcast-tools');
@@ -87,7 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const sliderMicVol = document.getElementById('slider-mic-vol');
   const labelMusicVol = document.getElementById('label-music-vol');
   const labelMicVol = document.getElementById('label-mic-vol');
-  const btnDucking = document.getElementById('btn-ducking');
 
   // Modals
   const loginModal = document.getElementById('login-modal');
@@ -113,12 +120,92 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentStyle = { bold: false, italic: false, underline: false, color: '#000000' };
   let isShowLive = false;
-  let isDucking = false;
-  let previousMusicVol = 80;
   let playlist = [];
 
   // ----------------------------------------------------
-  // 🔨 ดักรับเหตุการณ์ถูกเตะ หรือ ถูกแบน
+  // 🔔 MSN Soundpack Synthesizer (เสียงแจ้งเตือน MSN แท้ๆ)
+  // ----------------------------------------------------
+  function playMsnSound(type) {
+    if (!chkMsnSound || !chkMsnSound.checked) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const now = ctx.currentTime;
+      if (type === 'msg') {
+        // ตึ่ง ดึง ดึ๊ง (MSN Message Alert)
+        const notes = [659.25, 587.33, 880.00];
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator(), g = ctx.createGain();
+          osc.type = 'sine'; osc.frequency.setValueAtTime(freq, now + i * 0.08);
+          g.gain.setValueAtTime(0.12, now + i * 0.08);
+          g.gain.exponentialRampToValueAtTime(0.001, now + (i + 1) * 0.08);
+          osc.connect(g); g.connect(ctx.destination);
+          osc.start(now + i * 0.08); osc.stop(now + (i + 1) * 0.08);
+        });
+      } else if (type === 'nudge') {
+        // Nudge เสียงกระทบกระจกสั่น
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now);
+        osc.frequency.linearRampToValueAtTime(50, now + 0.35);
+        g.gain.setValueAtTime(0.35, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(now); osc.stop(now + 0.36);
+      }
+    } catch (e) {}
+  }
+
+  // ----------------------------------------------------
+  // 🦋 MSN Emoticons Replacement (แปลงคีย์ลัด)
+  // ----------------------------------------------------
+  const EMOTICON_MAP = {
+    '(H)': '🕶️', '(h)': '🕶️',
+    '(K)': '💋', '(k)': '💋',
+    '(P)': '📷', '(p)': '📷',
+    '(F)': '🌹', '(f)': '🌹',
+    '(M)': '🦋', '(m)': '🦋',
+    '(L)': '❤️', '(l)': '❤️',
+    '(6)': '😈',
+    '(Y)': '👍', '(y)': '👍',
+    ':-D': '😀', ':D': '😀',
+    ':-P': '😜', ':P': '😜',
+    ':-)': '😊', ':)': '😊'
+  };
+
+  function parseMsnEmoticons(text) {
+    let parsed = text;
+    Object.keys(EMOTICON_MAP).forEach(code => {
+      const escaped = code.replace(/([.*+?^=!:${}()|\[\]\/\\])/g, "\\$1");
+      const reg = new RegExp(escaped, 'g');
+      parsed = parsed.replace(reg, `<span class="msn-emoticon">${EMOTICON_MAP[code]}</span>`);
+    });
+    return parsed;
+  }
+
+  // ----------------------------------------------------
+  // 🎁 ส่งของขวัญเสมือน
+  // ----------------------------------------------------
+  giftButtons.forEach(btn => {
+    btn.onclick = () => {
+      const giftId = btn.getAttribute('data-gift');
+      const user = usernameInput.value.trim() || 'ผู้ฟังทางบ้าน';
+      socket.emit('send-virtual-gift', { user, giftId });
+    };
+  });
+
+  socket.on('receive-gift-animation', (data) => {
+    if (!giftFlyContainer) return;
+    const fly = document.createElement('div');
+    fly.className = 'floating-gift-item';
+    fly.innerHTML = `
+      <div class="gift-sender-label">${data.sender}</div>
+      <div style="font-size:32px;">${data.icon}</div>
+    `;
+    fly.style.right = `${Math.random() * 50 + 10}px`;
+    giftFlyContainer.appendChild(fly);
+    setTimeout(() => fly.remove(), 3100);
+  });
+
+  // ----------------------------------------------------
+  // 🔨 ดักจับเหตุการณ์เตะ/แบน
   // ----------------------------------------------------
   socket.on('kicked-notice', (data) => {
     alert(`⚠️ ${data.reason}`);
@@ -157,12 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ytPlayer = new YT.Player('yt-player-element', {
       height: '140',
       width: '100%',
-      playerVars: {
-        'autoplay': 1,
-        'controls': 1,
-        'rel': 0,
-        'playsinline': 1
-      },
+      playerVars: { 'autoplay': 1, 'controls': 1, 'rel': 0, 'playsinline': 1 },
       events: {
         'onReady': () => {
           isYtReady = true;
@@ -198,23 +280,21 @@ document.addEventListener('DOMContentLoaded', () => {
   function playYouTubeTrack(videoId, title, seekTo = 0) {
     if (ytScreenWrapper) ytScreenWrapper.classList.remove('hide');
     if (trackTitle) trackTitle.textContent = title || "YouTube Track";
-    if (trackArtist) trackArtist.textContent = "YouTube Broadcast";
+    if (trackArtist) trackArtist.textContent = isShowLive ? "Live Broadcast" : "Auto-DJ (Auto-Pilot)";
+
+    // อัปเดตสเตตัส MSN อัตโนมัติ: Now Listening
+    if (isListeningToMain && userstatusInput) {
+      userstatusInput.value = `🎵 กำลังฟัง: ${title}`;
+    }
 
     if (isYtReady && ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-      ytPlayer.loadVideoById({
-        videoId: videoId,
-        startSeconds: Math.floor(seekTo)
-      });
-
+      ytPlayer.loadVideoById({ videoId: videoId, startSeconds: Math.floor(seekTo) });
       setTimeout(() => {
-        if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
-          ytPlayer.seekTo(seekTo, true);
-        }
+        if (ytPlayer && typeof ytPlayer.seekTo === 'function') ytPlayer.seekTo(seekTo, true);
       }, 500);
 
-      if (!isListeningToMain) {
-        ytPlayer.mute();
-      } else {
+      if (!isListeningToMain) ytPlayer.mute();
+      else {
         ytPlayer.unMute();
         ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
       }
@@ -230,9 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentUrl = ytPlayer.getVideoUrl ? ytPlayer.getVideoUrl() : '';
     if (currentUrl.includes(data.videoId)) {
       const myTime = ytPlayer.getCurrentTime();
-      if (Math.abs(myTime - data.currentTime) > 2.5) {
-        ytPlayer.seekTo(data.currentTime, true);
-      }
+      if (Math.abs(myTime - data.currentTime) > 2.5) ytPlayer.seekTo(data.currentTime, true);
     }
   });
 
@@ -244,9 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('dj-stop-youtube', () => {
     if (ytScreenWrapper) ytScreenWrapper.classList.add('hide');
-    if (isYtReady && ytPlayer && typeof ytPlayer.stopVideo === 'function') {
-      ytPlayer.stopVideo();
-    }
+    if (isYtReady && ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
   });
 
   function extractYouTubeID(url) {
@@ -260,14 +336,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
       const videoId = extractYouTubeID(url);
       if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง!");
-
       socket.emit('dj-add-youtube-to-playlist', { videoId: videoId });
       djYtUrl.value = '';
     });
   }
 
   // ========================================================
-  // 📻 Thai Radio Streams (Direct Stream)
+  // 📻 Thai Radio Streams
   // ========================================================
   if (backupStationSelect) {
     backupStationSelect.addEventListener('change', (e) => {
@@ -278,20 +353,17 @@ document.addEventListener('DOMContentLoaded', () => {
         backupAudioPlayer.load();
         return;
       }
-
       if (isListeningToMain) stopListeningMainStation();
-
       backupAudioPlayer.pause();
       backupAudioPlayer.src = streamUrl;
       backupAudioPlayer.load();
-
-      const playPromise = backupAudioPlayer.play();
-      if (playPromise !== undefined) playPromise.catch(() => {});
+      const p = backupAudioPlayer.play();
+      if (p !== undefined) p.catch(() => {});
     });
   }
 
   // ==========================================
-  // 🔐 ระบบสมัคร / ล็อกอิน / จัดการดีเจ
+  // 🔐 Auth / DJ Login
   // ==========================================
   if (usernameInput) {
     if (localStorage.getItem('saved_username')) usernameInput.value = localStorage.getItem('saved_username');
@@ -330,7 +402,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loginModal.classList.remove('hide'); loginUserInput.focus();
   };
   loginBtnCancel.onclick = () => loginModal.classList.add('hide');
-
   loginBtnConfirm.onclick = () => executeLogin();
   loginPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeLogin(); });
 
@@ -399,9 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
             usernameInput.value = res.name;
           }
           renderPlaylist();
-        } else {
-          localStorage.removeItem('auth_session');
-        }
+        } else localStorage.removeItem('auth_session');
       });
     } catch(e) {}
   }
@@ -431,13 +500,8 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       djApprovalList.appendChild(li);
     });
-
-    djApprovalList.querySelectorAll('.approve-dj-btn').forEach(b => {
-      b.onclick = () => socket.emit('admin-approve-dj', b.getAttribute('data-id'));
-    });
-    djApprovalList.querySelectorAll('.reject-dj-btn').forEach(b => {
-      b.onclick = () => socket.emit('admin-reject-dj', b.getAttribute('data-id'));
-    });
+    djApprovalList.querySelectorAll('.approve-dj-btn').forEach(b => b.onclick = () => socket.emit('admin-approve-dj', b.getAttribute('data-id')));
+    djApprovalList.querySelectorAll('.reject-dj-btn').forEach(b => b.onclick = () => socket.emit('admin-reject-dj', b.getAttribute('data-id')));
   });
 
   socket.on('admin-registered-djs-update', (djList) => {
@@ -450,18 +514,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     djList.forEach(name => {
       const li = document.createElement('li');
-      li.innerHTML = `
-        <span>🎧 ${name}</span>
-        <button class="accept-req-btn reject-btn del-dj-btn" data-name="${name}">ลบ</button>
-      `;
+      li.innerHTML = `<span>🎧 ${name}</span><button class="accept-req-btn reject-btn del-dj-btn" data-name="${name}">ลบ</button>`;
       registeredDjsList.appendChild(li);
     });
     registeredDjsList.querySelectorAll('.del-dj-btn').forEach(btn => {
       btn.onclick = () => {
         const target = btn.getAttribute('data-name');
-        if (confirm(`ต้องการลบบัญชีดีเจ "${target}" ออกจากระบบใช่หรือไม่?`)) {
-          socket.emit('admin-delete-dj', target);
-        }
+        if (confirm(`ต้องการลบบัญชีดีเจ "${target}" ออกจากระบบใช่หรือไม่?`)) socket.emit('admin-delete-dj', target);
       };
     });
   });
@@ -476,18 +535,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     bList.forEach(item => {
       const li = document.createElement('li');
-      li.innerHTML = `
-        <div><strong>${item.username}</strong><br><span style="font-size:10px;color:#888;">IP: ${item.ip} (${item.bannedAt})</span></div>
-        <button class="accept-req-btn unban-btn" data-ip="${item.ip}">ปลดแบน</button>
-      `;
+      li.innerHTML = `<div><strong>${item.username}</strong><br><span style="font-size:10px;color:#888;">IP: ${item.ip}</span></div><button class="accept-req-btn unban-btn" data-ip="${item.ip}">ปลดแบน</button>`;
       bannedUsersList.appendChild(li);
     });
     bannedUsersList.querySelectorAll('.unban-btn').forEach(b => {
       b.onclick = () => {
         const ip = b.getAttribute('data-ip');
-        if (confirm(`ต้องการปลดแบน IP "${ip}" หรือไม่?`)) {
-          socket.emit('admin-unban-ip', ip);
-        }
+        if (confirm(`ต้องการปลดแบน IP "${ip}" หรือไม่?`)) socket.emit('admin-unban-ip', ip);
       };
     });
   });
@@ -520,12 +574,11 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.reload();
     }
   }
-
   btnDjLogout.onclick = performLogout;
   btnDjPortalLogout.onclick = performLogout;
 
   // ==========================================
-  // ✨ Glitter & Reactions & Nudge
+  // ✨ Glitter & Nudge
   // ==========================================
   const glitterCanvas = document.getElementById('glitter-canvas');
   const gCtx = glitterCanvas.getContext('2d');
@@ -535,11 +588,11 @@ document.addEventListener('DOMContentLoaded', () => {
   resizeCanvas();
 
   window.addEventListener('mousemove', (e) => {
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
       particles.push({
-        x: e.clientX + (Math.random() - 0.5) * 12,
-        y: e.clientY + (Math.random() - 0.5) * 12,
-        size: Math.random() * 4 + 2,
+        x: e.clientX + (Math.random() - 0.5) * 10,
+        y: e.clientY + (Math.random() - 0.5) * 10,
+        size: Math.random() * 3 + 2,
         color: `hsl(${Math.random() * 60 + 180}, 100%, 75%)`,
         alpha: 1, vy: Math.random() * 1.5 + 0.5, vx: (Math.random() - 0.5) * 1
       });
@@ -579,6 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   socket.on('receive-nudge', (data) => {
+    playMsnSound('nudge');
     if (mainAppWindow) {
       mainAppWindow.classList.remove('nudge-shake');
       void mainAppWindow.offsetWidth;
@@ -592,7 +646,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // 🔊 Audio & Visualizer & SFX
+  // 🔊 Web Audio API & Smart Auto-Ducking
   // ==========================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
   let nextMicPlayTime = 0;
@@ -647,7 +701,6 @@ document.addEventListener('DOMContentLoaded', () => {
   sfxButtons.forEach(btn => btn.onclick = () => socket.emit('dj-play-sfx', btn.getAttribute('data-sound')));
   socket.on('play-sfx', (type) => {
     if (!isListeningToMain) return;
-
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = ctx.createOscillator(), gain = ctx.createGain();
@@ -701,16 +754,6 @@ document.addEventListener('DOMContentLoaded', () => {
     else pinnedBanner.classList.add('hide');
   });
 
-  function playNotificationSound() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator(), gain = ctx.createGain();
-      osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1050, ctx.currentTime + 0.08);
-      gain.gain.setValueAtTime(0.12, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-      osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.16);
-    } catch (e) {}
-  }
-
   socket.on('online-users-count', (c) => onlineUsersBadge.textContent = `👥 ${c} คน`);
   socket.on('volume-update', (vols) => {
     if (listenAudioCtx) {
@@ -737,29 +780,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (listenAudioCtx && micGainNode) micGainNode.gain.setValueAtTime(val / 100, listenAudioCtx.currentTime);
   });
 
-  btnDucking.onclick = () => {
-    if (!isDucking) {
-      previousMusicVol = parseInt(sliderMusicVol.value);
-      sliderMusicVol.value = 20; labelMusicVol.textContent = "20%";
-      socket.emit('dj-volume-change', { type: 'music', volume: 0.2 });
-      if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(0.2, listenAudioCtx.currentTime);
-      if (isYtReady && ytPlayer && isListeningToMain) ytPlayer.setVolume(20);
-      btnDucking.classList.add('active'); btnDucking.textContent = "🔊 คืนระดับเสียงเดิม"; isDucking = true;
-    } else {
-      sliderMusicVol.value = previousMusicVol; labelMusicVol.textContent = `${previousMusicVol}%`;
-      socket.emit('dj-volume-change', { type: 'music', volume: previousMusicVol / 100 });
-      if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(previousMusicVol / 100, listenAudioCtx.currentTime);
-      if (isYtReady && ytPlayer && isListeningToMain) ytPlayer.setVolume(previousMusicVol);
-      btnDucking.classList.remove('active'); btnDucking.textContent = "🔉 หรี่เพลงพูดไมค์ (Ducking)"; isDucking = false;
-    }
-  };
-
   socket.on('topic-update', (t) => displayTopic.textContent = t);
   btnSaveTopic.onclick = () => { const t = djTopicInput.value.trim(); if (t) { socket.emit('dj-set-topic', t); djTopicInput.value = ''; } };
 
   socket.on('dj-status-update', (isLive) => {
     isShowLive = isLive;
-    stationStatus.textContent = isLive ? "● On Air (Live)" : "○ Offline";
+    stationStatus.textContent = isLive ? "● On Air (Live)" : "○ Offline (Auto-DJ)";
     stationStatus.className = isLive ? "status-online" : "status-offline";
     if (isShowLive) {
       btnShowToggle.textContent = "⏹️ จบรายการ (End Show)"; btnShowToggle.className = "y2k-btn off-air-btn";
@@ -776,14 +802,24 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ==========================================
-  // 💬 แชท & Moderation Tools (เตะ/แบน)
+  // 💬 Chat, MSN Status & Slow Mode (3 วินาที)
   // ==========================================
+  let lastChatTime = 0;
   let typingTimeout = null;
+
   chatInput.addEventListener('input', () => {
     socket.emit('typing-start', usernameInput.value.trim() || 'Guest');
     clearTimeout(typingTimeout);
     typingTimeout = setTimeout(() => socket.emit('typing-stop'), 2000);
   });
+
+  const PRESENCE_ICONS = {
+    online: '🟢',
+    busy: '🔴',
+    away: '🟡',
+    brb: '☕',
+    offline: '⚪'
+  };
 
   function renderMessage(data) {
     const bubble = document.createElement('div');
@@ -798,20 +834,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if ((myRole === 'admin' || myRole === 'dj') && data.senderSocketId && data.role !== 'admin' && data.senderSocketId !== socket.id) {
       modButtons = `
         <span class="mod-action-group">
-          <button class="mod-btn kick-btn" data-sid="${data.senderSocketId}" title="เตะออกจากห้อง">เตะ</button>
-          <button class="mod-btn ban-btn" data-sid="${data.senderSocketId}" title="แบนผู้ใช้นี้อย่างถาวร">แบน</button>
+          <button class="mod-btn kick-btn" data-sid="${data.senderSocketId}">เตะ</button>
+          <button class="mod-btn ban-btn" data-sid="${data.senderSocketId}">แบน</button>
         </span>
       `;
     }
 
+    const presenceDot = PRESENCE_ICONS[data.presence] || '🟢';
     const statusHTML = data.status ? `<span class="msn-status-tag">(${data.status})</span>` : '';
+    const parsedText = parseMsnEmoticons(data.text);
+
     bubble.innerHTML = `
       <div class="meta">
+        <span class="presence-dot">${presenceDot}</span>
         <span class="user-name">${data.user}</span>${statusHTML}${roleTag}${modButtons}
         <span style="font-weight:normal;color:#888;font-size:11px;">(${data.time})</span>:
       </div>
       <div class="text" style="color: ${s.color || '#000'} !important; font-weight: ${s.bold ? 'bold' : 'normal'} !important; font-style: ${s.italic ? 'italic' : 'normal'} !important; text-decoration: ${s.underline ? 'underline' : 'none'} !important;">
-        ${data.text}
+        ${parsedText}
       </div>
     `;
 
@@ -819,9 +859,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnKick) {
       btnKick.onclick = (e) => {
         e.stopPropagation();
-        const sid = btnKick.getAttribute('data-sid');
         if (confirm(`ต้องการเตะคุณ "${data.user}" ออกจากห้องใช่หรือไม่?`)) {
-          socket.emit('admin-kick-user', sid);
+          socket.emit('admin-kick-user', btnKick.getAttribute('data-sid'));
         }
       };
     }
@@ -830,9 +869,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnBan) {
       btnBan.onclick = (e) => {
         e.stopPropagation();
-        const sid = btnBan.getAttribute('data-sid');
         if (confirm(`ต้องการแบน IP ของ "${data.user}" ถาวรใช่หรือไม่?`)) {
-          socket.emit('admin-ban-user', sid);
+          socket.emit('admin-ban-user', btnBan.getAttribute('data-sid'));
         }
       };
     }
@@ -841,7 +879,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   socket.on('chat-history', (h) => { chatLogs.innerHTML = ''; h.forEach(renderMessage); chatLogs.scrollTop = chatLogs.scrollHeight; });
-  socket.on('chat-message', (data) => { renderMessage(data); chatLogs.scrollTop = chatLogs.scrollHeight; playNotificationSound(); });
+  socket.on('chat-message', (data) => {
+    renderMessage(data);
+    chatLogs.scrollTop = chatLogs.scrollHeight;
+    playMsnSound('msg');
+  });
   socket.on('chat-history-cleared', () => chatLogs.innerHTML = '<div style="text-align:center;color:#888;padding:10px;">--- เริ่มต้นวันใหม่ / ล้างข้อความ ---</div>');
 
   socket.on('user-typing', (data) => {
@@ -850,10 +892,23 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function sendMessage() {
-    const text = chatInput.value.trim(), user = usernameInput.value.trim() || 'Guest', status = userstatusInput.value.trim();
+    const now = Date.now();
+    // ⏱️ Slow Mode 3 วินาที ป้องกันสแปมแชท
+    if (now - lastChatTime < 3000 && myRole === 'listener') {
+      const wait = Math.ceil((3000 - (now - lastChatTime)) / 1000);
+      alert(`⏳ Slow Mode: กรุณารอ ${wait} วินาทีก่อนส่งข้อความถัดไป`);
+      return;
+    }
+
+    const text = chatInput.value.trim();
+    const user = usernameInput.value.trim() || 'Guest';
+    const status = userstatusInput.value.trim();
+    const presence = msnPresenceSelect.value;
     if (!text) return;
+
+    lastChatTime = now;
     clearTimeout(typingTimeout); socket.emit('typing-stop');
-    socket.emit('chat-message', { user, status, text, style: { ...currentStyle } });
+    socket.emit('chat-message', { user, status, presence, text, style: { ...currentStyle } });
     chatInput.value = ''; chatInput.focus();
   }
 
@@ -863,8 +918,12 @@ document.addEventListener('DOMContentLoaded', () => {
   btnBold.onclick = () => { currentStyle.bold = !currentStyle.bold; btnBold.classList.toggle('active', currentStyle.bold); chatInput.style.fontWeight = currentStyle.bold ? 'bold' : 'normal'; };
   btnItalic.onclick = () => { currentStyle.italic = !currentStyle.italic; btnItalic.classList.toggle('active', currentStyle.italic); chatInput.style.fontStyle = currentStyle.italic ? 'italic' : 'normal'; };
   btnUnderline.onclick = () => { currentStyle.underline = !currentStyle.underline; btnUnderline.classList.toggle('active', currentStyle.underline); chatInput.style.textDecoration = currentStyle.underline ? 'underline' : 'none'; };
+  
   btnEmoji.onclick = (e) => { e.stopPropagation(); emojiMenu.classList.toggle('hide'); };
-  emojiMenu.querySelectorAll('span').forEach(item => item.onclick = () => { chatInput.value += item.textContent; emojiMenu.classList.add('hide'); chatInput.focus(); });
+  emojiMenu.querySelectorAll('span').forEach(item => item.onclick = () => {
+    chatInput.value += ` ${item.getAttribute('data-code')} `;
+    emojiMenu.classList.add('hide'); chatInput.focus();
+  });
   document.addEventListener('click', () => emojiMenu.classList.add('hide'));
   chatColor.oninput = (e) => { currentStyle.color = e.target.value; chatInput.style.color = currentStyle.color; };
 
@@ -891,6 +950,11 @@ document.addEventListener('DOMContentLoaded', () => {
     isListeningToMain = true;
     btnListen.textContent = "🔊 กำลังรับฟังสด";
     btnListen.style.filter = "hue-rotate(90deg)";
+
+    // อัปเดต Now Listening บนสเตตัส MSN อัตโนมัติ
+    if (lastKnownTrack && lastKnownTrack.title && userstatusInput) {
+      userstatusInput.value = `🎵 กำลังฟัง: ${lastKnownTrack.title}`;
+    }
   }
 
   function stopListeningMainStation() {
@@ -909,11 +973,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('listener-audio-stream', async (data) => {
     if (!isListeningToMain) return;
-
     initAudioContext();
     if (listenAudioCtx.state === 'suspended') await listenAudioCtx.resume();
 
-    // 1. เสียงไมค์สด PCM Float32
+    // 1. ไมค์สด PCM
     if (data.type === 'mic' && data.pcmData) {
       try {
         const floatData = new Float32Array(data.pcmData);
@@ -928,13 +991,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (nextMicPlayTime < currentTime) nextMicPlayTime = currentTime;
         source.start(nextMicPlayTime);
         nextMicPlayTime += audioBuffer.duration;
-      } catch (err) {
-        console.error("PCM Mic decode error:", err);
-      }
+      } catch (err) {}
       return;
     }
 
-    // 2. ไฟล์เพลง MP3
+    // 2. เพลง MP3
     if (data.type === 'music') {
       try {
         const bufferData = data.buffer || data;
@@ -965,9 +1026,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1000);
 
         source.start();
-      } catch (e) {
-        console.error("MP3 decode error:", e);
-      }
+      } catch (e) {}
     }
   });
 
@@ -975,10 +1034,8 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.on('track-update', (t) => {
     lastKnownTrack = t;
     trackTitle.textContent = t.title; trackArtist.textContent = t.artist;
-    if (["รอเริ่มรายการ", "จบรายการแล้ว", "ดีเจออฟไลน์"].includes(t.title)) {
-      if (trackTimerInterval) clearInterval(trackTimerInterval);
-      trackTimeCurrent.textContent = "00:00"; trackTimeTotal.textContent = "00:00"; trackProgressFill.style.width = "0%";
-      if (ytScreenWrapper) ytScreenWrapper.classList.add('hide');
+    if (isListeningToMain && userstatusInput && t.title) {
+      userstatusInput.value = `🎵 กำลังฟัง: ${t.title}`;
     }
   });
 
@@ -1009,11 +1066,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function playItemAtIndex(idx) {
     if (!playlist[idx]) return;
-
-    if (!isShowLive) {
-      alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนเปิดเพลงครับ!");
-      return;
-    }
+    if (!isShowLive) return alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนครับ!");
 
     const item = playlist.splice(idx, 1)[0];
     socket.emit('dj-update-playlist', playlist);
@@ -1049,33 +1102,52 @@ document.addEventListener('DOMContentLoaded', () => {
     playItemAtIndex(0);
   };
 
-  // ========================================================
-  // 🎙️ ไมค์ดีเจ: สตรีมด้วย Web Audio API (PCM Float32 แท้)
-  // ========================================================
+  // ----------------------------------------------------
+  // 🎙️ ไมค์ดีเจ & Smart VAD Auto-Ducking
+  // ----------------------------------------------------
   let micStream = null;
   let micAudioCtx = null;
   let micProcessorNode = null;
   let isBroadcastingMic = false;
+  let duckingTimeout = null;
 
   btnMic.onclick = async () => {
     if (!isBroadcastingMic) {
       try {
         micStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true
-          }
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
 
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         micAudioCtx = new AudioContext();
         const micSourceNode = micAudioCtx.createMediaStreamSource(micStream);
-
         micProcessorNode = micAudioCtx.createScriptProcessor(4096, 1, 1);
+
         micProcessorNode.onaudioprocess = (e) => {
           if (!isBroadcastingMic) return;
           const inputData = e.inputBuffer.getChannelData(0);
+
+          // คำนวณระดับความดังของเสียง (RMS) สำหรับ Smart Auto-Ducking
+          if (chkAutoDucking && chkAutoDucking.checked) {
+            let sum = 0;
+            for (let i = 0; i < inputData.length; i++) sum += inputData[i] * inputData[i];
+            const rms = Math.sqrt(sum / inputData.length);
+
+            // ถ้ามีเสียงพูดเกิน Threshold (0.04) ให้หรี่เพลงอัตโนมัติ
+            if (rms > 0.04) {
+              if (isYtReady && ytPlayer) ytPlayer.setVolume(20);
+              if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(0.2, listenAudioCtx.currentTime);
+
+              clearTimeout(duckingTimeout);
+              // หยุดพูด 1.5 วินาที แล้วคืนระดับเสียงเดิม
+              duckingTimeout = setTimeout(() => {
+                const origVol = parseInt(sliderMusicVol.value);
+                if (isYtReady && ytPlayer) ytPlayer.setVolume(origVol);
+                if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(origVol / 100, listenAudioCtx.currentTime);
+              }, 1500);
+            }
+          }
+
           socket.emit('dj-audio-stream', {
             type: 'mic',
             pcmData: inputData.buffer,
@@ -1090,25 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnMic.style.filter = "hue-rotate(280deg)";
         isBroadcastingMic = true;
       } catch (err) {
-        alert("ไม่สามารถเข้าถึงไมโครโฟนได้: " + err.message);
+        alert("ไม่สามารถเข้าถึงไมค์: " + err.message);
       }
     } else {
-      if (micProcessorNode) {
-        micProcessorNode.disconnect();
-        micProcessorNode = null;
-      }
-      if (micAudioCtx) {
-        micAudioCtx.close();
-        micAudioCtx = null;
-      }
-      if (micStream) {
-        micStream.getTracks().forEach(track => track.stop());
-        micStream = null;
-      }
-
-      btnMic.textContent = "🎙️ เปิดไมค์";
-      btnMic.style.filter = "none";
-      isBroadcastingMic = false;
-    }
-  };
-});
+      if (micProcessor
