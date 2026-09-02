@@ -107,11 +107,19 @@
               <button type="button" id="btn-dj-logout" class="y2k-btn logout-btn">🚪 ออกจากระบบ</button>
             </div>
 
-            <!-- กล่องเฉพาะ Super Admin: อนุมัติดีเจ -->
+            <!-- กล่องเฉพาะ Super Admin 1: อนุมัติดีเจที่ขอจัดรายการ -->
             <div id="admin-approval-panel" class="admin-panel hide">
               <div class="sfx-title">👑 คิวดีเจที่รออนุมัติ (<span id="dj-queue-count">0</span>)</div>
               <ul id="dj-approval-list" class="requests-list">
                 <li>ไม่มีดีเจรออนุมัติ</li>
+              </ul>
+            </div>
+
+            <!-- กล่องเฉพาะ Super Admin 2: ตรวจสอบรายชื่อดีเจทั้งหมดที่ลงทะเบียนไว้ -->
+            <div id="admin-registered-djs-box" class="admin-panel hide" style="margin-top: 6px;">
+              <div class="sfx-title">📋 ดีเจที่ลงทะเบียนไว้ (<span id="reg-dj-count">0</span>)</div>
+              <ul id="registered-djs-list" class="requests-list">
+                <li>ยังไม่มีดีเจลงทะเบียน</li>
               </ul>
             </div>
 
@@ -285,7 +293,7 @@
     </div>
   </div>
 
-  <!-- ป๊อปอัปเข้าสู่ระบบ (Login Modal สำหรับ Admin และ DJ) -->
+  <!-- ป๊อปอัปเข้าสู่ระบบ -->
   <div id="login-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -310,7 +318,7 @@
     </div>
   </div>
 
-  <!-- ป๊อปอัปสมัครสมาชิกเป็นดีเจ (Register Modal) -->
+  <!-- ป๊อปอัปสมัครสมาชิกเป็นดีเจ -->
   <div id="register-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -336,6 +344,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

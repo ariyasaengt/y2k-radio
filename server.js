@@ -10,27 +10,25 @@ const io = new Server(server, { maxHttpBufferSize: 1e7 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// รหัสผ่าน Super Admin สูงสุดของคุณ
+// รหัสผ่าน Super Admin
 const ADMIN_SECRET_KEY = "0024252600";
 
 let adminSocketId = null;
-let currentBroadcaster = null; // { socketId, role, username }
+let currentBroadcaster = null;
 let isDJLive = false;
 let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0, youtubeId: null };
 let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨";
 let pinnedMessage = null;
 let playlist = [];
 let songRequests = [];
-let djQueue = []; // คิวดีเจที่รออนุมัติ: [{ socketId, username, time }]
+let djQueue = []; // คิวรออนุมัติ: [{ socketId, username, time }]
 
 let onlineUsersCount = 0;
 let currentVolumes = { music: 0.8, mic: 1.0 };
 
-// --- ไฟล์ฐานข้อมูลประวัติแชท ---
 const CHAT_FILE = path.join(__dirname, 'chat_history.json');
 let chatHistory = [];
 
-// --- ไฟล์ฐานข้อมูลบัญชีดีเจ ---
 const DJS_FILE = path.join(__dirname, 'djs_database.json');
 let registeredDJs = {}; // { username: password }
 
@@ -104,7 +102,7 @@ io.on('connection', (socket) => {
   socket.emit('requests-update', songRequests);
   socket.emit('chat-history', chatHistory);
 
-  // ส่งแชท
+  // ระบบส่งแชท
   socket.on('chat-message', (data) => {
     checkDayReset();
     const newMsg = {
@@ -120,7 +118,7 @@ io.on('connection', (socket) => {
     io.emit('chat-message', newMsg);
   });
 
-  // 1. ระบบสมัครเป็นดีเจใหม่
+  // สมัครเป็นดีเจ
   socket.on('dj-register', (data, callback) => {
     const { username, password } = data;
     const cleanUser = (username || '').trim();
@@ -138,26 +136,28 @@ io.on('connection', (socket) => {
 
     registeredDJs[cleanUser] = cleanPass;
     saveRegisteredDJs();
-    callback({ success: true, message: "สมัครบัญชีดีเจสำเร็จ! คุณสามารถเข้าสู่ระบบเพื่อขอจัดรายการได้เลย" });
+    
+    // อัปเดตรายชื่อดีเจแบบเรียลไทม์ไปยังหน้าจอแอดมิน
+    if (adminSocketId) io.to(adminSocketId).emit('admin-registered-djs-update', Object.keys(registeredDJs));
+    callback({ success: true, message: "สมัครบัญชีดีเจสำเร็จ! เข้าสู่ระบบเพื่อขอจัดรายการได้เลย" });
   });
 
-  // 2. ระบบยืนยันตัวตน (Login สำหรับ Admin และ DJ)
+  // เข้าสู่ระบบ (Admin / DJ)
   socket.on('auth-login', (data, callback) => {
     const { username, password } = data;
     const cleanUser = (username || '').trim();
     const cleanPass = (password || '').trim();
 
-    // ตรวจสอบว่าเป็น Super Admin หรือไม่
     if (cleanPass === ADMIN_SECRET_KEY) {
       socket.userRole = 'admin';
       socket.djName = cleanUser || 'Super Admin';
       adminSocketId = socket.id;
       callback({ success: true, role: 'admin', name: socket.djName });
       socket.emit('admin-dj-queue-update', djQueue);
+      socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
       return;
     }
 
-    // ตรวจสอบบัญชีดีเจที่ลงทะเบียนไว้
     if (registeredDJs[cleanUser] && registeredDJs[cleanUser] === cleanPass) {
       socket.userRole = 'dj_member';
       socket.djName = cleanUser;
@@ -168,11 +168,17 @@ io.on('connection', (socket) => {
     callback({ success: false, message: "ชื่อหรือรหัสผ่านไม่ถูกต้อง!" });
   });
 
-  // 3. ดีเจกดส่งคำขอขึ้นจัดรายการสด
+  // แอดมินลบบัญชีดีเจ
+  socket.on('admin-delete-dj', (djNameToDelete) => {
+    if (socket.userRole !== 'admin') return;
+    delete registeredDJs[djNameToDelete];
+    saveRegisteredDJs();
+    socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
+  });
+
+  // ดีเจขอขึ้นคิวจัดรายการ
   socket.on('dj-request-queue', () => {
     if (socket.userRole !== 'dj_member') return;
-    
-    // บันทึกเข้าคิวรอ
     if (!djQueue.some(q => q.socketId === socket.id)) {
       djQueue.push({
         socketId: socket.id,
@@ -180,12 +186,11 @@ io.on('connection', (socket) => {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       });
     }
-
     socket.emit('dj-queue-waiting');
     if (adminSocketId) io.to(adminSocketId).emit('admin-dj-queue-update', djQueue);
   });
 
-  // 4. แอดมินอนุมัติดีเจ
+  // แอดมินอนุมัติดีเจ
   socket.on('admin-approve-dj', (djSocketId) => {
     if (socket.userRole !== 'admin') return;
     const djIdx = djQueue.findIndex(q => q.socketId === djSocketId);
@@ -200,7 +205,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 5. แอดมินปฏิเสธดีเจ
+  // แอดมินปฏิเสธดีเจ
   socket.on('admin-reject-dj', (djSocketId) => {
     if (socket.userRole !== 'admin') return;
     djQueue = djQueue.filter(q => q.socketId !== djSocketId);
@@ -212,7 +217,7 @@ io.on('connection', (socket) => {
     io.to(adminSocketId).emit('admin-dj-queue-update', djQueue);
   });
 
-  // เริ่มจัดรายการ (แอดมินหรือดีเจที่ผ่านอนุมัติ)
+  // เริ่ม/จบจัดรายการ
   socket.on('dj-start-show', () => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     isDJLive = true;
@@ -230,7 +235,7 @@ io.on('connection', (socket) => {
     io.emit('dj-stop-youtube');
   });
 
-  // เล่นเพลงและสตรีมมิ่ง
+  // สตรีมและควบคุมเพลง
   socket.on('dj-play-youtube', (ytData) => {
     if (!isDJLive || (socket.userRole !== 'admin' && socket.userRole !== 'dj')) return;
     currentTrack = {

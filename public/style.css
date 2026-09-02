@@ -503,7 +503,7 @@ body {
 .chat-bubble { padding: 3px 0; }
 .chat-bubble .meta { color: #0055ea; font-weight: bold; font-size: 11px; }
 
-/* ยศแอดมินและดีเจในแชท */
+/* ยศในห้องแชท */
 .role-badge-admin {
   background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
   color: #fef08a !important;
@@ -681,6 +681,30 @@ body {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px; }
 .error-msg { color: #cc0000; font-size: 11px; font-weight: bold; }
 
+/* แก้ปัญหาปุ่มล้นขอบทั้งหมดใน sidebar */
+.side-bar .input-row {
+  display: flex !important;
+  gap: 4px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.side-bar .input-row input {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.side-bar .input-row .y2k-btn {
+  flex-shrink: 0 !important;
+  padding: 4px 6px !important;
+  font-size: 11px !important;
+  white-space: nowrap !important;
+}
+
+.yt-play-btn {
+  padding: 4px 8px !important;
+}
+
 @media (max-width: 768px) {
   body { height: auto !important; min-height: 100vh; overflow-y: auto !important; padding: 6px !important; display: block !important; }
   .desktop-wrap { flex-direction: column !important; height: auto !important; max-width: 100% !important; gap: 10px; }
@@ -693,29 +717,4 @@ body {
   .input-row { flex-wrap: wrap; }
   #username, #userstatus { width: 100% !important; }
   #btn-send { width: 70px; }
-}
-
-/* ป้องกัน input ทุกตัวใน sidebar ดันปุ่มจนล้นกรอบ */
-.side-bar .input-row {
-  display: flex !important;
-  gap: 4px !important;
-  width: 100% !important;
-  max-width: 100% !important;
-}
-
-.side-bar .input-row input {
-  min-width: 0 !important; /* ปลดล็อก min-width ทำให้หดตัวตามความกว้างจริงได้ */
-  width: 100% !important;
-}
-
-.side-bar .input-row .y2k-btn {
-  flex-shrink: 0 !important; /* ห้ามปุ่มบีบจนเสียรูป */
-  padding: 4px 6px !important;
-  font-size: 11px !important;
-  white-space: nowrap !important;
-}
-
-/* ปรับปุ่มเพิ่มเข้าคิว YouTube สีแดง ให้กระชับพอดี */
-.yt-play-btn {
-  padding: 4px 8px !important;
 }
