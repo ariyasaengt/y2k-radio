@@ -6,35 +6,55 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  maxHttpBufferSize: 1e7 // รองรับ buffer เสียง 10MB
+  maxHttpBufferSize: 1e7
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// กำหนดรหัสผ่านของดีเจ/แอดมินตรงนี้
 const DJ_SECRET_KEY = "1234";
 
 let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline" };
 let playlist = [];
 
+// ตัวแปรเก็บประวัติข้อความแชทประจำวัน
+let chatHistory = [];
+let currentDay = new Date().toLocaleDateString('th-TH');
+
+// ฟังก์ชันล้างข้อความอัตโนมัติเมื่อขึ้นวันใหม่
+function checkDayReset() {
+  const today = new Date().toLocaleDateString('th-TH');
+  if (today !== currentDay) {
+    chatHistory = [];
+    currentDay = today;
+    io.emit('chat-history-cleared');
+  }
+}
+
 io.on('connection', (socket) => {
-  // ส่งสถานะปัจจุบันให้ผู้ฟัง
+  checkDayReset();
+
+  // ส่งสถานะเพลง คิวเพลง และประวัติแชททั้งหมดให้คนที่เพิ่งเปิดเว็บเข้ามา
   socket.emit('track-update', currentTrack);
   socket.emit('playlist-update', playlist);
+  socket.emit('chat-history', chatHistory);
 
-
-  // ระบบส่งข้อความแชท (ตรวจจับยศดีเจจากเซิร์ฟเวอร์)
+  // ระบบแชท
   socket.on('chat-message', (data) => {
-    io.emit('chat-message', {
+    checkDayReset();
+
+    const newMsg = {
       user: data.user || 'Guest',
       text: data.text,
       style: data.style || {},
-      isDJ: socket.isDJ || false, // ตรวจสอบว่าคนส่งคือดีเจที่ยืนยันรหัสผ่านแล้วหรือไม่
+      isDJ: socket.isDJ || false,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    });
+    };
+
+    chatHistory.push(newMsg);
+    io.emit('chat-message', newMsg);
   });
 
-  // ตรวจสอบรหัสผ่านดีเจ
+  // ตรวจสอบและยืนยันสิทธิ์ดีเจ
   socket.on('dj-auth', (key, callback) => {
     if (key === DJ_SECRET_KEY) {
       socket.isDJ = true;
@@ -44,21 +64,18 @@ io.on('connection', (socket) => {
     }
   });
 
-  // อัปเดตเพลง (เฉพาะคนที่มีสิทธิ์ดีเจ)
   socket.on('dj-update-track', (data) => {
     if (!socket.isDJ) return;
     currentTrack = data.track;
     io.emit('track-update', currentTrack);
   });
 
-  // อัปเดตเพลย์ลิสต์ (เฉพาะดีเจ)
   socket.on('dj-update-playlist', (list) => {
     if (!socket.isDJ) return;
     playlist = list;
     io.emit('playlist-update', playlist);
   });
 
-  // สตรีมเสียง (เฉพาะดีเจ)
   socket.on('dj-audio-stream', (audioChunk) => {
     if (!socket.isDJ) return;
     socket.broadcast.emit('listener-audio-stream', audioChunk);

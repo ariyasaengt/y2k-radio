@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
   const socket = io();
 
-  // Elements ทั่วไป
   const chatLogs = document.getElementById('chat-logs');
   const chatInput = document.getElementById('chat-message');
   const usernameInput = document.getElementById('username');
@@ -11,7 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const playlistContainer = document.getElementById('playlist-container');
   const btnListen = document.getElementById('btn-listen');
 
-  // DJ Elements
   const btnDjLogin = document.getElementById('btn-dj-login');
   const djLoginSection = document.getElementById('dj-login-section');
   const djControlsSection = document.getElementById('dj-controls-section');
@@ -19,14 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnPlayMusic = document.getElementById('btn-play-music');
   const btnMic = document.getElementById('btn-mic');
 
-  // Modal Elements
   const djModal = document.getElementById('dj-modal');
   const modalPassInput = document.getElementById('modal-pass-input');
   const modalBtnConfirm = document.getElementById('modal-btn-confirm');
   const modalBtnCancel = document.getElementById('modal-btn-cancel');
   const modalError = document.getElementById('modal-error');
 
-  // Toolbar Elements
   const btnBold = document.getElementById('btn-bold');
   const btnItalic = document.getElementById('btn-italic');
   const btnUnderline = document.getElementById('btn-underline');
@@ -36,49 +32,61 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentStyle = { bold: false, italic: false, underline: false, color: '#000000' };
 
-  // --- ปุ่มเข้าสู่โหมดดีเจ ---
+  // --- จดจำชื่อเล่นผู้ใช้งาน ---
+  if (localStorage.getItem('saved_username')) {
+    usernameInput.value = localStorage.getItem('saved_username');
+  }
+  usernameInput.addEventListener('input', () => {
+    localStorage.setItem('saved_username', usernameInput.value.trim());
+  });
+
+  // --- ระบบตรวจสิทธิ์ DJ อัตโนมัติเมื่อรีเฟรชหน้าเว็บ ---
+  const savedDJKey = localStorage.getItem('dj_access_key');
+  if (savedDJKey) {
+    socket.emit('dj-auth', savedDJKey, (res) => {
+      if (res.success) unlockDJControls();
+      else localStorage.removeItem('dj_access_key');
+    });
+  }
+
+  function unlockDJControls() {
+    if (djLoginSection) djLoginSection.classList.add('hide');
+    if (djControlsSection) djControlsSection.classList.remove('hide');
+  }
+
   if (btnDjLogin) {
-    btnDjLogin.onclick = function() {
+    btnDjLogin.onclick = () => {
       if (djModal) {
         modalPassInput.value = '';
         if (modalError) modalError.classList.add('hide');
         djModal.classList.remove('hide');
         modalPassInput.focus();
       } else {
-        // แผนสำรองกรณีหา modal ไม่เจอ
         const pass = prompt("กรุณากรอกรหัสผ่านประจำตัวดีเจ (1234):");
-        if (pass) checkDJAuth(pass);
+        if (pass) verifyDJAuth(pass);
       }
     };
   }
 
-  if (modalBtnCancel) {
-    modalBtnCancel.onclick = function() {
-      if (djModal) djModal.classList.add('hide');
-    };
-  }
+  if (modalBtnCancel) modalBtnCancel.onclick = () => djModal.classList.add('hide');
 
   if (modalBtnConfirm) {
-    modalBtnConfirm.onclick = function() {
-      const pass = modalPassInput.value.trim();
-      checkDJAuth(pass);
-    };
+    modalBtnConfirm.onclick = () => verifyDJAuth(modalPassInput.value.trim());
   }
 
   if (modalPassInput) {
     modalPassInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') checkDJAuth(modalPassInput.value.trim());
+      if (e.key === 'Enter') verifyDJAuth(modalPassInput.value.trim());
     });
   }
 
-  function checkDJAuth(pass) {
+  function verifyDJAuth(pass) {
     if (!pass) return;
     socket.emit('dj-auth', pass, (res) => {
       if (res.success) {
+        localStorage.setItem('dj_access_key', pass);
         if (djModal) djModal.classList.add('hide');
-        if (djLoginSection) djLoginSection.classList.add('hide');
-        if (djControlsSection) djControlsSection.classList.remove('hide');
-        alert("เข้าสู่โหมดดีเจสำเร็จ!");
+        unlockDJControls();
       } else {
         if (modalError) {
           modalError.textContent = res.message;
@@ -90,7 +98,76 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- Toolbar Formatting ---
+  // --- ฟังก์ชันสร้างกล่องข้อความ ---
+  function renderMessage(data) {
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+
+    const s = data.style || {};
+    const textColor = s.color || '#000000';
+    const textWeight = s.bold ? 'bold' : 'normal';
+    const textStyle = s.italic ? 'italic' : 'normal';
+    const textDecor = s.underline ? 'underline' : 'none';
+
+    const djBadgeHTML = data.isDJ 
+      ? `<span class="dj-badge-tag">🎧 DJ Admin</span>` 
+      : '';
+
+    bubble.innerHTML = `
+      <div class="meta">
+        <span class="user-name">${data.user}</span>${djBadgeHTML}
+        <span style="font-weight:normal;color:#888;font-size:11px;">(${data.time})</span>:
+      </div>
+      <div class="text" style="color: ${textColor} !important; font-weight: ${textWeight} !important; font-style: ${textStyle} !important; text-decoration: ${textDecor} !important;">
+        ${data.text}
+      </div>
+    `;
+    chatLogs.appendChild(bubble);
+  }
+
+  // รับประวัติข้อความทั้งหมดที่เคยคุยกันในวันนั้น
+  socket.on('chat-history', (history) => {
+    chatLogs.innerHTML = '';
+    history.forEach(msg => renderMessage(msg));
+    chatLogs.scrollTop = chatLogs.scrollHeight;
+  });
+
+  socket.on('chat-message', (data) => {
+    renderMessage(data);
+    chatLogs.scrollTop = chatLogs.scrollHeight;
+  });
+
+  socket.on('chat-history-cleared', () => {
+    chatLogs.innerHTML = '<div style="text-align:center;color:#888;padding:10px;">--- เริ่มต้นวันใหม่ (ประวัติแชทถูกรีเซ็ต) ---</div>';
+  });
+
+  // --- จัดการการส่งแชท ---
+  function sendMessage() {
+    const text = chatInput.value.trim();
+    const user = usernameInput.value.trim() || 'Guest';
+    if (!text) return;
+
+    socket.emit('chat-message', {
+      user,
+      text,
+      style: { ...currentStyle }
+    });
+
+    chatInput.value = '';
+    chatInput.focus();
+  }
+
+  if (btnSend) btnSend.onclick = sendMessage;
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  }
+
+  // Toolbar Formatting
   if (btnBold) {
     btnBold.onclick = () => {
       currentStyle.bold = !currentStyle.bold;
@@ -139,62 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // --- ระบบส่งแชท ---
-  function sendMessage() {
-    const text = chatInput.value.trim();
-    const user = usernameInput.value.trim() || 'Guest';
-    if (!text) return;
-
-    socket.emit('chat-message', {
-      user,
-      text,
-      style: { ...currentStyle }
-    });
-
-    chatInput.value = '';
-    chatInput.focus();
-  }
-
-  if (btnSend) btnSend.onclick = sendMessage;
-  if (chatInput) {
-    chatInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-  }
-
-  // แสดงผลข้อความแชท พร้อมป้ายยศดีเจ
-  socket.on('chat-message', (data) => {
-    const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble';
-
-    const s = data.style || {};
-    const textColor = s.color || '#000000';
-    const textWeight = s.bold ? 'bold' : 'normal';
-    const textStyle = s.italic ? 'italic' : 'normal';
-    const textDecor = s.underline ? 'underline' : 'none';
-
-    // ถ้าเป็นดีเจ ให้แสดงป้ายยศพิเศษต่อท้ายชื่อ
-    const djBadgeHTML = data.isDJ 
-      ? `<span class="dj-badge-tag">🎧 DJ Admin</span>` 
-      : '';
-
-    bubble.innerHTML = `
-      <div class="meta">
-        <span class="user-name">${data.user}</span>${djBadgeHTML}
-        <span style="font-weight:normal;color:#888;font-size:11px;">(${data.time})</span>:
-      </div>
-      <div class="text" style="color: ${textColor} !important; font-weight: ${textWeight} !important; font-style: ${textStyle} !important; text-decoration: ${textDecor} !important;">
-        ${data.text}
-      </div>
-    `;
-    chatLogs.appendChild(bubble);
-    chatLogs.scrollTop = chatLogs.scrollHeight;
-  });
-
-  // --- ระบบเสียงและออกอากาศ ---
+  // --- Audio & DJ Streaming ---
   let listenAudioCtx = null;
   let isBroadcastingMic = false;
   let mediaRecorder = null;
