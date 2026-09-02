@@ -433,3 +433,51 @@ body {
   vertical-align: middle;
   text-shadow: none;
 }
+
+/* สถานะออนไลน์และออฟไลน์ */
+.status-online {
+  color: #28a745;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.status-offline {
+  color: #777777;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+/* เมนูเลือกคลื่นสำรอง */
+.y2k-select {
+  width: 100%;
+  border: 1px solid #8ab96f;
+  border-radius: 5px;
+  padding: 4px;
+  background: #ffffff;
+  color: #1a4205;
+  outline: none;
+}
+
+/* ปุ่มเริ่มจัดรายการ */
+.on-air-btn {
+  width: 100%;
+  background: linear-gradient(180deg, #ff8c8c 0%, #d93838 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid #991c1c !important;
+  padding: 8px !important;
+}
+
+.off-air-btn {
+  width: 100%;
+  background: linear-gradient(180deg, #cccccc 0%, #888888 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid #555555 !important;
+  padding: 8px !important;
+}
+
+.broadcast-tools {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

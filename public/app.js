@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const socket = io();
 
+  const stationStatus = document.getElementById('station-status');
   const chatLogs = document.getElementById('chat-logs');
   const chatInput = document.getElementById('chat-message');
   const usernameInput = document.getElementById('username');
@@ -10,19 +11,28 @@ document.addEventListener('DOMContentLoaded', () => {
   const playlistContainer = document.getElementById('playlist-container');
   const btnListen = document.getElementById('btn-listen');
 
+  // Backup Radio Tuner
+  const backupStationSelect = document.getElementById('backup-station-select');
+  const backupAudioPlayer = document.getElementById('backup-audio-player');
+
+  // DJ Elements
   const btnDjLogin = document.getElementById('btn-dj-login');
   const djLoginSection = document.getElementById('dj-login-section');
   const djControlsSection = document.getElementById('dj-controls-section');
+  const btnShowToggle = document.getElementById('btn-show-toggle');
+  const djBroadcastTools = document.getElementById('dj-broadcast-tools');
   const djFileInput = document.getElementById('dj-file-input');
   const btnPlayMusic = document.getElementById('btn-play-music');
   const btnMic = document.getElementById('btn-mic');
 
+  // Modal
   const djModal = document.getElementById('dj-modal');
   const modalPassInput = document.getElementById('modal-pass-input');
   const modalBtnConfirm = document.getElementById('modal-btn-confirm');
   const modalBtnCancel = document.getElementById('modal-btn-cancel');
   const modalError = document.getElementById('modal-error');
 
+  // Toolbar
   const btnBold = document.getElementById('btn-bold');
   const btnItalic = document.getElementById('btn-italic');
   const btnUnderline = document.getElementById('btn-underline');
@@ -31,8 +41,58 @@ document.addEventListener('DOMContentLoaded', () => {
   const chatColor = document.getElementById('chat-color');
 
   let currentStyle = { bold: false, italic: false, underline: false, color: '#000000' };
+  let isShowLive = false;
 
-  // --- จดจำชื่อเล่นผู้ใช้งาน ---
+  // --- ระบบคลื่นสำรอง (Backup Tuner) ---
+  backupStationSelect.addEventListener('change', (e) => {
+    const streamUrl = e.target.value;
+    if (streamUrl) {
+      backupAudioPlayer.src = streamUrl;
+      backupAudioPlayer.play();
+    } else {
+      backupAudioPlayer.pause();
+      backupAudioPlayer.src = '';
+    }
+  });
+
+  // --- รับสถานะ On Air / Offline ของสถานีหลัก ---
+  socket.on('dj-status-update', (isLive) => {
+    isShowLive = isLive;
+    if (isLive) {
+      stationStatus.textContent = "● On Air (Live)";
+      stationStatus.className = "status-online";
+    } else {
+      stationStatus.textContent = "○ Offline";
+      stationStatus.className = "status-offline";
+    }
+    updateShowButtonUI();
+  });
+
+  function updateShowButtonUI() {
+    if (!btnShowToggle) return;
+    if (isShowLive) {
+      btnShowToggle.textContent = "⏹️ จบรายการ (End Show)";
+      btnShowToggle.className = "y2k-btn off-air-btn";
+      djBroadcastTools.classList.remove('hide');
+    } else {
+      btnShowToggle.textContent = "🔴 เริ่มจัดรายการ (Go Live)";
+      btnShowToggle.className = "y2k-btn on-air-btn";
+      djBroadcastTools.classList.add('hide');
+    }
+  }
+
+  // --- ปุ่ม On Air / Off Air ---
+  btnShowToggle.addEventListener('click', () => {
+    if (!isShowLive) {
+      socket.emit('dj-start-show');
+    } else {
+      if (confirm("ต้องการจบรายการใช่หรือไม่?")) {
+        socket.emit('dj-end-show');
+      }
+    }
+  });
+
+  // --- จดจำชื่อเล่นและสิทธิ์ดีเจ ---
   if (localStorage.getItem('saved_username')) {
     usernameInput.value = localStorage.getItem('saved_username');
   }
@@ -40,12 +100,16 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('saved_username', usernameInput.value.trim());
   });
 
-  // --- ระบบตรวจสิทธิ์ DJ อัตโนมัติเมื่อรีเฟรชหน้าเว็บ ---
   const savedDJKey = localStorage.getItem('dj_access_key');
   if (savedDJKey) {
     socket.emit('dj-auth', savedDJKey, (res) => {
-      if (res.success) unlockDJControls();
-      else localStorage.removeItem('dj_access_key');
+      if (res.success) {
+        unlockDJControls();
+        isShowLive = res.isLive;
+        updateShowButtonUI();
+      } else {
+        localStorage.removeItem('dj_access_key');
+      }
     });
   }
 
@@ -54,51 +118,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (djControlsSection) djControlsSection.classList.remove('hide');
   }
 
-  if (btnDjLogin) {
-    btnDjLogin.onclick = () => {
-      if (djModal) {
-        modalPassInput.value = '';
-        if (modalError) modalError.classList.add('hide');
-        djModal.classList.remove('hide');
-        modalPassInput.focus();
-      } else {
-        const pass = prompt("กรุณากรอกรหัสผ่านประจำตัวดีเจ (1234):");
-        if (pass) verifyDJAuth(pass);
-      }
-    };
-  }
+  btnDjLogin.onclick = () => {
+    modalPassInput.value = '';
+    if (modalError) modalError.classList.add('hide');
+    djModal.classList.remove('hide');
+    modalPassInput.focus();
+  };
 
-  if (modalBtnCancel) modalBtnCancel.onclick = () => djModal.classList.add('hide');
-
-  if (modalBtnConfirm) {
-    modalBtnConfirm.onclick = () => verifyDJAuth(modalPassInput.value.trim());
-  }
-
-  if (modalPassInput) {
-    modalPassInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') verifyDJAuth(modalPassInput.value.trim());
-    });
-  }
+  modalBtnCancel.onclick = () => djModal.classList.add('hide');
+  modalBtnConfirm.onclick = () => verifyDJAuth(modalPassInput.value.trim());
+  modalPassInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') verifyDJAuth(modalPassInput.value.trim());
+  });
 
   function verifyDJAuth(pass) {
     if (!pass) return;
     socket.emit('dj-auth', pass, (res) => {
       if (res.success) {
         localStorage.setItem('dj_access_key', pass);
-        if (djModal) djModal.classList.add('hide');
+        djModal.classList.add('hide');
         unlockDJControls();
+        isShowLive = res.isLive;
+        updateShowButtonUI();
       } else {
-        if (modalError) {
-          modalError.textContent = res.message;
-          modalError.classList.remove('hide');
-        } else {
-          alert(res.message);
-        }
+        modalError.textContent = res.message;
+        modalError.classList.remove('hide');
       }
     });
   }
 
-  // --- ฟังก์ชันสร้างกล่องข้อความ ---
+  // --- แชทและ Toolbar ---
   function renderMessage(data) {
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble';
@@ -125,7 +174,6 @@ document.addEventListener('DOMContentLoaded', () => {
     chatLogs.appendChild(bubble);
   }
 
-  // รับประวัติข้อความทั้งหมดที่เคยคุยกันในวันนั้น
   socket.on('chat-history', (history) => {
     chatLogs.innerHTML = '';
     history.forEach(msg => renderMessage(msg));
@@ -138,10 +186,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('chat-history-cleared', () => {
-    chatLogs.innerHTML = '<div style="text-align:center;color:#888;padding:10px;">--- เริ่มต้นวันใหม่ (ประวัติแชทถูกรีเซ็ต) ---</div>';
+    chatLogs.innerHTML = '<div style="text-align:center;color:#888;padding:10px;">--- เริ่มต้นวันใหม่ ---</div>';
   });
 
-  // --- จัดการการส่งแชท ---
   function sendMessage() {
     const text = chatInput.value.trim();
     const user = usernameInput.value.trim() || 'Guest';
@@ -157,84 +204,69 @@ document.addEventListener('DOMContentLoaded', () => {
     chatInput.focus();
   }
 
-  if (btnSend) btnSend.onclick = sendMessage;
-  if (chatInput) {
-    chatInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-  }
+  btnSend.onclick = sendMessage;
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
 
-  // Toolbar Formatting
-  if (btnBold) {
-    btnBold.onclick = () => {
-      currentStyle.bold = !currentStyle.bold;
-      btnBold.classList.toggle('active', currentStyle.bold);
-      chatInput.style.fontWeight = currentStyle.bold ? 'bold' : 'normal';
+  btnBold.onclick = () => {
+    currentStyle.bold = !currentStyle.bold;
+    btnBold.classList.toggle('active', currentStyle.bold);
+    chatInput.style.fontWeight = currentStyle.bold ? 'bold' : 'normal';
+  };
+
+  btnItalic.onclick = () => {
+    currentStyle.italic = !currentStyle.italic;
+    btnItalic.classList.toggle('active', currentStyle.italic);
+    chatInput.style.fontStyle = currentStyle.italic ? 'italic' : 'normal';
+  };
+
+  btnUnderline.onclick = () => {
+    currentStyle.underline = !currentStyle.underline;
+    btnUnderline.classList.toggle('active', currentStyle.underline);
+    chatInput.style.textDecoration = currentStyle.underline ? 'underline' : 'none';
+  };
+
+  btnEmoji.onclick = (e) => {
+    e.stopPropagation();
+    emojiMenu.classList.toggle('hide');
+  };
+
+  emojiMenu.querySelectorAll('span').forEach(item => {
+    item.onclick = () => {
+      chatInput.value += item.textContent;
+      emojiMenu.classList.add('hide');
+      chatInput.focus();
     };
-  }
+  });
 
-  if (btnItalic) {
-    btnItalic.onclick = () => {
-      currentStyle.italic = !currentStyle.italic;
-      btnItalic.classList.toggle('active', currentStyle.italic);
-      chatInput.style.fontStyle = currentStyle.italic ? 'italic' : 'normal';
-    };
-  }
+  document.addEventListener('click', () => emojiMenu.classList.add('hide'));
 
-  if (btnUnderline) {
-    btnUnderline.onclick = () => {
-      currentStyle.underline = !currentStyle.underline;
-      btnUnderline.classList.toggle('active', currentStyle.underline);
-      chatInput.style.textDecoration = currentStyle.underline ? 'underline' : 'none';
-    };
-  }
+  chatColor.oninput = (e) => {
+    currentStyle.color = e.target.value;
+    chatInput.style.color = currentStyle.color;
+  };
 
-  if (btnEmoji && emojiMenu) {
-    btnEmoji.onclick = (e) => {
-      e.stopPropagation();
-      emojiMenu.classList.toggle('hide');
-    };
-
-    emojiMenu.querySelectorAll('span').forEach(item => {
-      item.onclick = () => {
-        chatInput.value += item.textContent;
-        emojiMenu.classList.add('hide');
-        chatInput.focus();
-      };
-    });
-
-    document.addEventListener('click', () => emojiMenu.classList.add('hide'));
-  }
-
-  if (chatColor) {
-    chatColor.oninput = (e) => {
-      currentStyle.color = e.target.value;
-      chatInput.style.color = currentStyle.color;
-    };
-  }
-
-  // --- Audio & DJ Streaming ---
+  // --- Audio Player สถานีหลัก ---
   let listenAudioCtx = null;
   let isBroadcastingMic = false;
   let mediaRecorder = null;
   let playlist = [];
 
-  if (btnListen) {
-    btnListen.onclick = async () => {
-      if (!listenAudioCtx) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        listenAudioCtx = new AudioContext();
-        await listenAudioCtx.resume();
-        btnListen.textContent = "🔊 กำลังรับฟังสด";
-        btnListen.style.filter = "hue-rotate(90deg)";
-      } else if (listenAudioCtx.state === 'suspended') {
-        await listenAudioCtx.resume();
-      }
-    };
-  }
+  btnListen.onclick = async () => {
+    if (!listenAudioCtx) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      listenAudioCtx = new AudioContext();
+      await listenAudioCtx.resume();
+      btnListen.textContent = "🔊 กำลังรับฟังสด";
+      btnListen.style.filter = "hue-rotate(90deg)";
+    } else if (listenAudioCtx.state === 'suspended') {
+      await listenAudioCtx.resume();
+    }
+  };
 
   socket.on('listener-audio-stream', async (arrayBuffer) => {
     if (!listenAudioCtx) return;
@@ -268,45 +300,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  if (djFileInput) {
-    djFileInput.onchange = (e) => {
-      playlist = Array.from(e.target.files);
-      socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name })));
-    };
-  }
+  // เครื่องมือดีเจ
+  djFileInput.onchange = (e) => {
+    playlist = Array.from(e.target.files);
+    socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name })));
+  };
 
-  if (btnPlayMusic) {
-    btnPlayMusic.onclick = async () => {
-      if (playlist.length === 0) return alert('กรุณาเลือกไฟล์เพลงก่อน');
-      const file = playlist.shift();
-      socket.emit('dj-update-track', { track: { title: file.name, artist: "DJ On Air" } });
-      const arrayBuffer = await file.arrayBuffer();
-      socket.emit('dj-audio-stream', arrayBuffer);
-    };
-  }
+  btnPlayMusic.onclick = async () => {
+    if (playlist.length === 0) return alert('กรุณาเลือกไฟล์เพลงก่อน');
+    const file = playlist.shift();
+    socket.emit('dj-update-track', { track: { title: file.name, artist: "DJ On Air" } });
+    const arrayBuffer = await file.arrayBuffer();
+    socket.emit('dj-audio-stream', arrayBuffer);
+  };
 
-  if (btnMic) {
-    btnMic.onclick = async () => {
-      if (!isBroadcastingMic) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
-          mediaRecorder.ondataavailable = async (e) => {
-            if (e.data.size > 0) socket.emit('dj-audio-stream', await e.data.arrayBuffer());
-          };
-          mediaRecorder.start(400);
-          btnMic.textContent = "🛑 ปิดไมค์";
-          btnMic.style.filter = "hue-rotate(280deg)";
-          isBroadcastingMic = true;
-        } catch (err) {
-          alert("ไม่สามารถเข้าถึงไมค์: " + err.message);
-        }
-      } else {
-        if (mediaRecorder) mediaRecorder.stop();
-        btnMic.textContent = "🎙️ เปิดไมค์";
-        btnMic.style.filter = "none";
-        isBroadcastingMic = false;
+  btnMic.onclick = async () => {
+    if (!isBroadcastingMic) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = async (e) => {
+          if (e.data.size > 0) socket.emit('dj-audio-stream', await e.data.arrayBuffer());
+        };
+        mediaRecorder.start(400);
+        btnMic.textContent = "🛑 ปิดไมค์";
+        btnMic.style.filter = "hue-rotate(280deg)";
+        isBroadcastingMic = true;
+      } catch (err) {
+        alert("ไม่สามารถเข้าถึงไมค์: " + err.message);
       }
-    };
-  }
+    } else {
+      if (mediaRecorder) mediaRecorder.stop();
+      btnMic.textContent = "🎙️ เปิดไมค์";
+      btnMic.style.filter = "none";
+      isBroadcastingMic = false;
+    }
+  };
 });

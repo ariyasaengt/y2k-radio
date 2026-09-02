@@ -15,24 +15,39 @@
         <span class="title">Radio Controller</span>
       </div>
       
+      <!-- ป้ายสถานะสถานีหลัก -->
       <div class="user-badge">
         <div class="avatar-box">📻</div>
         <div class="user-meta">
-          <strong>Station Live</strong>
-          <span class="status-online">● Online</span>
+          <strong>Station Main Live</strong>
+          <span id="station-status" class="status-offline">○ Offline</span>
         </div>
       </div>
 
       <div class="side-content">
+        <!-- กล่อง Now Playing ของสถานีหลัก -->
         <div class="section-box">
-          <div class="section-title">Now Playing</div>
+          <div class="section-title">Now Playing (Main)</div>
           <div class="now-playing-box">
             <div id="track-title" class="track-title">รอเริ่มรายการ</div>
-            <div id="track-artist" class="track-sub">-</div>
+            <div id="track-artist" class="track-sub">Offline</div>
           </div>
-          <button id="btn-listen" class="y2k-btn primary-btn">▶ ฟังวิทยุสด</button>
+          <button id="btn-listen" class="y2k-btn primary-btn">▶ ฟังสถานีหลัก</button>
         </div>
 
+        <!-- กล่องคลื่นวิทยุสำรอง (เปิดฟังเพลงชิลล์ได้เมื่อไม่มีดีเจ) -->
+        <div class="section-box tuner-box">
+          <div class="section-title">Backup Tuner (คลื่นสำรอง)</div>
+          <select id="backup-station-select" class="y2k-select">
+            <option value="">-- เลือกคลื่นฟังระหว่างรอดีเจ --</option>
+            <option value="https://stream.zeno.fm/f3wvbbqmdg8uv">Lofi Chill Beats</option>
+            <option value="https://stream.zeno.fm/0r0xa792kwzuv">CityPop & 80s Retro</option>
+            <option value="https://stream.zeno.fm/7c22e415ptzuv">Smooth Jazz Cafe</option>
+          </select>
+          <audio id="backup-audio-player" controls style="width: 100%; height: 28px; margin-top: 6px;"></audio>
+        </div>
+
+        <!-- กล่องคิวเพลง -->
         <div class="section-box playlist-section">
           <div class="section-title">Playlist Queue</div>
           <ul id="playlist-container" class="playlist-list">
@@ -40,6 +55,7 @@
           </ul>
         </div>
 
+        <!-- แผงดีเจ / แอดมิน -->
         <div class="section-box dj-panel">
           <div class="section-title">DJ Booth (Admin)</div>
           
@@ -48,11 +64,17 @@
           </div>
 
           <div id="dj-controls-section" class="dj-controls hide">
-            <div class="dj-badge-status">🎧 สิทธิ์: ดีเจออกอากาศ</div>
-            <input type="file" id="dj-file-input" accept="audio/*" multiple>
-            <div class="btn-group">
-              <button id="btn-mic" class="y2k-btn">🎙️ เปิดไมค์</button>
-              <button id="btn-play-music" class="y2k-btn">🎵 เปิดเพลงถัดไป</button>
+            <!-- ปุ่มเริ่ม/จบรายการ -->
+            <div class="show-control-group">
+              <button id="btn-show-toggle" class="y2k-btn on-air-btn">🔴 เริ่มจัดรายการ (Go Live)</button>
+            </div>
+
+            <div id="dj-broadcast-tools" class="broadcast-tools hide">
+              <input type="file" id="dj-file-input" accept="audio/*" multiple>
+              <div class="btn-group">
+                <button id="btn-mic" class="y2k-btn">🎙️ เปิดไมค์</button>
+                <button id="btn-play-music" class="y2k-btn">🎵 เปิดเพลงถัดไป</button>
+              </div>
             </div>
           </div>
         </div>
@@ -105,7 +127,7 @@
     </main>
   </div>
 
-  <!-- กล่องป๊อปอัปกรอกรหัสดีเจ -->
+  <!-- กล่องใส่รหัสดีเจ -->
   <div id="dj-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -124,8 +146,7 @@
     </div>
   </div>
 
-  <!-- เปลี่ยนบรรทัดนี้เพื่อแก้ปัญหา Cache -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

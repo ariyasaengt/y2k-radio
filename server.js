@@ -13,14 +13,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const DJ_SECRET_KEY = "1234";
 
+let isDJLive = false; // เช็กสถานะว่าเริ่มรายการแล้วหรือยัง
+let activeDJSockets = new Set(); // เก็บ socket ของดีเจที่ออนไลน์
+
 let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline" };
 let playlist = [];
-
-// ตัวแปรเก็บประวัติข้อความแชทประจำวัน
 let chatHistory = [];
 let currentDay = new Date().toLocaleDateString('th-TH');
 
-// ฟังก์ชันล้างข้อความอัตโนมัติเมื่อขึ้นวันใหม่
 function checkDayReset() {
   const today = new Date().toLocaleDateString('th-TH');
   if (today !== currentDay) {
@@ -33,15 +33,15 @@ function checkDayReset() {
 io.on('connection', (socket) => {
   checkDayReset();
 
-  // ส่งสถานะเพลง คิวเพลง และประวัติแชททั้งหมดให้คนที่เพิ่งเปิดเว็บเข้ามา
+  // ส่งสถานะปัจจุบันให้ผู้ฟัง
+  socket.emit('dj-status-update', isDJLive);
   socket.emit('track-update', currentTrack);
   socket.emit('playlist-update', playlist);
   socket.emit('chat-history', chatHistory);
 
-  // ระบบแชท
+  // แชท
   socket.on('chat-message', (data) => {
     checkDayReset();
-
     const newMsg = {
       user: data.user || 'Guest',
       text: data.text,
@@ -49,23 +49,39 @@ io.on('connection', (socket) => {
       isDJ: socket.isDJ || false,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-
     chatHistory.push(newMsg);
     io.emit('chat-message', newMsg);
   });
 
-  // ตรวจสอบและยืนยันสิทธิ์ดีเจ
+  // ยืนยันสิทธิ์ดีเจ
   socket.on('dj-auth', (key, callback) => {
     if (key === DJ_SECRET_KEY) {
       socket.isDJ = true;
-      callback({ success: true });
+      activeDJSockets.add(socket.id);
+      callback({ success: true, isLive: isDJLive });
     } else {
       callback({ success: false, message: "รหัสผ่านดีเจไม่ถูกต้อง!" });
     }
   });
 
-  socket.on('dj-update-track', (data) => {
+  // ดีเจกดเริ่มจัดรายการ
+  socket.on('dj-start-show', () => {
     if (!socket.isDJ) return;
+    isDJLive = true;
+    io.emit('dj-status-update', true);
+  });
+
+  // ดีเจกดจบรายการ
+  socket.on('dj-end-show', () => {
+    if (!socket.isDJ) return;
+    isDJLive = false;
+    currentTrack = { title: "จบรายการแล้ว", artist: "Offline" };
+    io.emit('dj-status-update', false);
+    io.emit('track-update', currentTrack);
+  });
+
+  socket.on('dj-update-track', (data) => {
+    if (!socket.isDJ || !isDJLive) return;
     currentTrack = data.track;
     io.emit('track-update', currentTrack);
   });
@@ -77,8 +93,21 @@ io.on('connection', (socket) => {
   });
 
   socket.on('dj-audio-stream', (audioChunk) => {
-    if (!socket.isDJ) return;
+    if (!socket.isDJ || !isDJLive) return;
     socket.broadcast.emit('listener-audio-stream', audioChunk);
+  });
+
+  // เมื่อดีเจปิดหน้าเว็บ หรือเน็ตหลุด
+  socket.on('disconnect', () => {
+    if (socket.isDJ) {
+      activeDJSockets.delete(socket.id);
+      if (activeDJSockets.size === 0 && isDJLive) {
+        isDJLive = false;
+        currentTrack = { title: "ดีเจออฟไลน์", artist: "Offline" };
+        io.emit('dj-status-update', false);
+        io.emit('track-update', currentTrack);
+      }
+    }
   });
 });
 
