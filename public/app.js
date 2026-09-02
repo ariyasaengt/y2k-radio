@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let myRole = 'listener';
   let myDJName = '';
-  let isListeningToMain = false; // ตัวควบคุม: จะมีเสียงต่อเมื่อกดปุ่มรับฟังสถานีหลักเท่านั้น
+  let isListeningToMain = false; // มีเสียงเมื่อกดปุ่มรับฟังสถานีหลักเท่านั้น
 
   const mainAppWindow = document.getElementById('main-app-window');
   const stationStatus = document.getElementById('station-status');
@@ -114,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let playlist = [];
 
   // ==========================================
-  // 🎥 YouTube IFrame Player
+  // 🎥 YouTube IFrame Player (พร้อม Sync เวลา)
   // ==========================================
   let ytPlayer = null;
   let isYtReady = false;
@@ -149,15 +149,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   };
 
-  function playYouTubeTrack(videoId, title) {
+  function playYouTubeTrack(videoId, title, seekTo = 0) {
     if (ytScreenWrapper) ytScreenWrapper.classList.remove('hide');
     if (trackTitle) trackTitle.textContent = title || "YouTube Track";
     if (trackArtist) trackArtist.textContent = "YouTube Broadcast";
 
     if (isYtReady && ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-      ytPlayer.loadVideoById(videoId);
-      
-      // ถ้าผู้ใช้ยังไม่ได้กดปุ่มรับฟังสถานีหลัก ให้ปิดเสียงไว้
+      ytPlayer.loadVideoById({
+        videoId: videoId,
+        startSeconds: seekTo
+      });
+
+      if (seekTo > 0 && typeof ytPlayer.seekTo === 'function') {
+        ytPlayer.seekTo(seekTo, true);
+      }
+
       if (!isListeningToMain) {
         ytPlayer.mute();
       } else {
@@ -166,14 +172,14 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       ytPlayer.playVideo();
     } else {
-      setTimeout(() => playYouTubeTrack(videoId, title), 800);
+      setTimeout(() => playYouTubeTrack(videoId, title, seekTo), 800);
     }
   }
 
   socket.on('play-youtube-track', (data) => {
     initAudioContext();
     if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
-    playYouTubeTrack(data.videoId, data.title);
+    playYouTubeTrack(data.videoId, data.title, data.seekTo || 0);
   });
 
   socket.on('dj-stop-youtube', () => {
@@ -213,7 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // เมื่อเลือกคลื่นไทย ให้ปิดเสียงสถานีหลักทันที
       if (isListeningToMain) {
         stopListeningMainStation();
       }
@@ -556,7 +561,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   sfxButtons.forEach(btn => btn.onclick = () => socket.emit('dj-play-sfx', btn.getAttribute('data-sound')));
   socket.on('play-sfx', (type) => {
-    // ซาวด์เอฟเฟกต์จะดังเฉพาะเมื่อผู้ใช้กดรับฟังสถานีหลักเท่านั้น
     if (!isListeningToMain) return;
 
     try {
@@ -757,13 +761,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (listenAudioCtx.state === 'suspended') {
       listenAudioCtx.resume();
     }
-    
-    // ปิดเสียงวิทยุสำรองหากเปิดอยู่
+
     if (backupAudioPlayer) {
       backupAudioPlayer.pause();
     }
 
-    // ปลด Mute สำหรับ YouTube
     if (isYtReady && ytPlayer) {
       ytPlayer.unMute();
       ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
@@ -779,7 +781,6 @@ document.addEventListener('DOMContentLoaded', () => {
       listenAudioCtx.suspend();
     }
 
-    // สั่งปิดเสียง YouTube
     if (isYtReady && ytPlayer && typeof ytPlayer.mute === 'function') {
       ytPlayer.mute();
     }
@@ -789,7 +790,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnListen.style.filter = "none";
   }
 
-  // ปุ่มกดฟังสถานีหลัก (สลับเปิด/ปิดเสียง)
   btnListen.onclick = () => {
     if (!isListeningToMain) {
       startListeningMainStation();
@@ -799,7 +799,6 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   socket.on('listener-audio-stream', async (data) => {
-    // ถ้ายังไม่ได้กดปุ่มรับฟังสถานีหลัก จะไม่เล่นเสียง
     if (!isListeningToMain) return;
 
     initAudioContext();
@@ -867,6 +866,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function playItemAtIndex(idx) {
     if (!playlist[idx]) return;
+
+    // ตรวจสอบสถานะว่าเริ่มจัดรายการ (Go Live) แล้วหรือยัง
+    if (!isShowLive) {
+      alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนเปิดเพลงครับ!");
+      return;
+    }
+
     const item = playlist.splice(idx, 1)[0];
     socket.emit('dj-update-playlist', playlist);
 
@@ -896,6 +902,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnPlayMusic.onclick = () => {
+    if (!isShowLive) return alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนครับ!");
     if (playlist.length === 0) return alert('ไม่มีเพลงในคิว');
     playItemAtIndex(0);
   };

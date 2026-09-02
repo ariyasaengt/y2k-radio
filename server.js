@@ -16,7 +16,7 @@ const ADMIN_SECRET_KEY = "0024252600";
 let adminSocketId = null;
 let currentBroadcaster = null;
 let isDJLive = false;
-let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0, youtubeId: null };
+let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
 let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨";
 let pinnedMessage = null;
 let playlist = [];
@@ -84,7 +84,23 @@ io.on('connection', (socket) => {
   checkDayReset();
 
   socket.emit('dj-status-update', isDJLive);
-  socket.emit('track-update', currentTrack);
+
+  // คำนวณตำแหน่งเวลาเพลง YouTube สำหรับผู้ฟังที่เพิ่งเปิดเข้ามากลางคัน
+  let trackToSend = { ...currentTrack };
+  if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
+    trackToSend.seekTo = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
+  }
+  socket.emit('track-update', trackToSend);
+
+  // หากสถานีกำลัง On Air และมีเพลงกำลังเล่น ให้ส่งคำสั่งเล่นพร้อมเวลาเริ่ม seekTo ไปทันที
+  if (isDJLive && currentTrack.youtubeId) {
+    socket.emit('play-youtube-track', {
+      videoId: currentTrack.youtubeId,
+      title: currentTrack.title,
+      seekTo: trackToSend.seekTo || 0
+    });
+  }
+
   socket.emit('topic-update', todayTopic);
   socket.emit('pinned-update', pinnedMessage);
   socket.emit('volume-update', currentVolumes);
@@ -197,23 +213,32 @@ io.on('connection', (socket) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     isDJLive = false;
     currentBroadcaster = null;
-    currentTrack = { title: "จบรายการแล้ว", artist: "Offline", duration: 0, youtubeId: null };
+    currentTrack = { title: "จบรายการแล้ว", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
     io.emit('dj-status-update', false);
     io.emit('track-update', currentTrack);
     io.emit('dj-stop-youtube');
   });
 
-  // เล่นเพลง YouTube ทันที
+  // เล่นเพลง YouTube (ต้อง On Air เท่านั้น และบันทึกเวลาเริ่มต้นเพื่อคำนวณ Sync)
   socket.on('dj-play-youtube', (ytData) => {
+    if (!isDJLive) return; // บล็อกถ้ายังไม่ได้เริ่มจัดรายการ
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+
+    const startedAt = Date.now();
     currentTrack = {
       title: ytData.title || "YouTube Audio",
       artist: socket.userRole === 'admin' ? "Super Admin" : `DJ ${socket.djName}`,
       duration: 0,
-      youtubeId: ytData.videoId
+      youtubeId: ytData.videoId,
+      startedAt: startedAt
     };
+
     io.emit('track-update', currentTrack);
-    io.emit('play-youtube-track', ytData);
+    io.emit('play-youtube-track', {
+      videoId: ytData.videoId,
+      title: ytData.title,
+      seekTo: 0
+    });
   });
 
   // ดึงชื่อเพลงจริงจาก YouTube oEmbed ฝั่งเซิร์ฟเวอร์
@@ -339,7 +364,7 @@ io.on('connection', (socket) => {
     if (currentBroadcaster && currentBroadcaster.socketId === socket.id) {
       isDJLive = false;
       currentBroadcaster = null;
-      currentTrack = { title: "ดีเจออฟไลน์", artist: "Offline", duration: 0, youtubeId: null };
+      currentTrack = { title: "ดีเจออฟไลน์", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
       io.emit('dj-status-update', false);
       io.emit('track-update', currentTrack);
       io.emit('dj-stop-youtube');
