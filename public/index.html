@@ -13,6 +13,7 @@
   <div id="yt-player-hidden" style="position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;"></div>
 
   <div id="main-app-window" class="desktop-wrap">
+    <!-- แถบซ้าย: สถานีวิทยุและดีเจ -->
     <aside class="window-pane side-bar">
       <div class="window-header">
         <span class="icon-flower">🌸</span>
@@ -31,6 +32,7 @@
       </div>
 
       <div class="side-content">
+        <!-- Now Playing -->
         <div class="section-box">
           <div class="section-title">Now Playing (Main)</div>
           <div class="now-playing-box">
@@ -49,26 +51,25 @@
           </div>
         </div>
 
-        <!-- Thai Radio Tuner ชุดสตรีมสดจริงผ่าน Proxy หลังบ้าน -->
+        <!-- Thai Radio Tuner (Direct Global HTTPS Streams) -->
         <div class="section-box tuner-box">
           <div class="section-title">Thai Radio Tuner (คลื่นวิทยุไทยสด)</div>
           <select id="backup-station-select" class="y2k-select">
             <option value="">-- เลือกคลื่นวิทยุไทยยอดนิยม --</option>
             <optgroup label="🎵 เพลงสตริง / สากลฮิต">
-              <option value="http://radio.prd.go.th/fm925/live.mp3">วิทยุแห่งประเทศไทย สวท. FM 92.5</option>
-              <option value="https://stream.zeno.fm/0r0xa792kwzuv">CityPop & Retro Asian Pop (24 ชม.)</option>
-              <option value="http://radio11.plathong.net:7068/;stream.mp3">FM 106 ข่าว & เพลงครอบครัว</option>
+              <option value="https://stream.zeno.fm/0r0xa792kwzuv">CityPop & Retro Hits 80s-90s</option>
+              <option value="https://stream.zeno.fm/u2768tz918zuv">Thai Pop Radio Hits (เพลงไทยฮิต)</option>
+              <option value="https://icecast.bkwsu.eu/connectthailand.mp3">Connect Thailand Radio (ฟังสบาย 24 ชม.)</option>
             </optgroup>
-            <optgroup label="🌾 ลูกทุ่ง / เพื่อชีวิต / หมอลำ">
-              <option value="http://radio12.plathong.net:7086/;stream.mp3">ลูกทุ่งมหานคร LTMFM 95 (อสมท.)</option>
-              <option value="http://radio11.plathong.net:7114/;stream.mp3">ลูกทุ่งหมอลำ & อีสานเรดิโอ</option>
-              <option value="http://radio10.plathong.net:7020/;stream.mp3">เพลงเพื่อชีวิตอมตะ เรดิโอ</option>
+            <optgroup label="🌾 ลูกทุ่ง / หมอลำ / เพื่อชีวิต">
+              <option value="https://stream.zeno.fm/4wy075u3a0hvv">สถานีเพลงลูกทุ่ง & หมอลำ</option>
+              <option value="https://stream.zeno.fm/k2k5uuv3a0hvv">เพลงเพื่อชีวิต อมตะ</option>
             </optgroup>
-            <optgroup label="📻 จราจร / ข่าวสาร">
-              <option value="http://fm91bkk.com:8000/live">FM 91 สวพ. (รายงานจราจร & ข่าวสด)</option>
+            <optgroup label="📻 ข่าวสาร / วาไรตี้">
+              <option value="https://stream.zeno.fm/f38y8b93a0hvv">Thai News & Variety Talk</option>
             </optgroup>
           </select>
-          <audio id="backup-audio-player" controls style="width: 100%; height: 28px; margin-top: 6px;"></audio>
+          <audio id="backup-audio-player" controls preload="none" style="width: 100%; height: 28px; margin-top: 6px;"></audio>
         </div>
 
         <div class="section-box playlist-section">
@@ -78,6 +79,7 @@
           </ul>
         </div>
 
+        <!-- แผงดีเจและแอดมิน -->
         <div class="section-box dj-panel">
           <div class="section-title">Broadcast Booth</div>
           
@@ -200,6 +202,7 @@
       </div>
     </aside>
 
+    <!-- แถบขวา: ห้องแชท -->
     <main class="window-pane chat-window">
       <div class="window-header">
         <span class="icon-bubble">💬</span>
@@ -333,6 +336,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>

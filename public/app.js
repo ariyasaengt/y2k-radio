@@ -112,28 +112,34 @@ document.addEventListener('DOMContentLoaded', () => {
   let previousMusicVol = 80;
 
   // ========================================================
-  // 📻 Thai Radio Streams (Direct ผ่าน Proxy หลังบ้าน)
+  // 📻 Thai Radio Streams (Direct Stream ปลอดภัย ไม่โดนบล็อก)
   // ========================================================
   if (backupStationSelect) {
     backupStationSelect.addEventListener('change', (e) => {
-      const rawUrl = e.target.value;
-      if (!rawUrl) {
+      const streamUrl = e.target.value;
+
+      if (!streamUrl) {
         backupAudioPlayer.pause();
         backupAudioPlayer.removeAttribute('src');
         backupAudioPlayer.load();
         return;
       }
 
-      // วิ่งผ่าน Audio Proxy เพื่อแปลง Response Header เป็น HTTP และข้าม CORS/SSL
-      const proxyUrl = `/api/radio-stream?url=${encodeURIComponent(rawUrl)}`;
+      // หยุดระบบเสียงของสถานีหลักหากกำลังเปิดอยู่
+      if (listenAudioCtx && listenAudioCtx.state === 'running') {
+        listenAudioCtx.suspend();
+        btnListen.textContent = "▶ ฟังสถานีหลัก";
+        btnListen.style.filter = "none";
+      }
+
       backupAudioPlayer.pause();
-      backupAudioPlayer.src = proxyUrl;
+      backupAudioPlayer.src = streamUrl;
       backupAudioPlayer.load();
 
       const playPromise = backupAudioPlayer.play();
       if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          console.warn("Audio autoplay blocked or stream buffering:", err);
+        playPromise.catch(() => {
+          // หากเบราว์เซอร์บล็อก Autoplay ให้ผู้ใช้กดปุ่ม Play สามเหลี่ยมที่เครื่องเล่นเองได้
         });
       }
     });
