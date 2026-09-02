@@ -6,6 +6,17 @@
   font-size: 13px;
 }
 
+/* แคนวาสละอองวิบวับ Glitter คลุมเต็มจอ */
+#glitter-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 99999;
+}
+
 body {
   background: #0a246a url('https://web.archive.org/web/20091027110156/http://geocities.com/clipart/pbi/backgrounds/Generic/clouds.jpg') repeat;
   display: flex;
@@ -23,6 +34,22 @@ body {
   width: 100%;
   max-width: 100%;
   height: 100%;
+  transition: transform 0.05s ease;
+}
+
+/* เอฟเฟกต์สะกิดสั่นสะเทือนสไตล์ MSN Nudge */
+.nudge-shake {
+  animation: msnShake 0.45s ease-in-out;
+}
+
+@keyframes msnShake {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  15% { transform: translate(-10px, -6px) rotate(-1deg); }
+  30% { transform: translate(10px, 6px) rotate(1deg); }
+  45% { transform: translate(-8px, 4px) rotate(-0.5deg); }
+  60% { transform: translate(8px, -4px) rotate(0.5deg); }
+  75% { transform: translate(-4px, 2px) rotate(0deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
 }
 
 .window-pane {
@@ -87,7 +114,6 @@ body {
   padding: 1px 6px;
   border-radius: 10px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
-  letter-spacing: 0.3px;
   white-space: nowrap;
 }
 
@@ -146,11 +172,22 @@ body {
 .track-sub {
   color: #93c5fd;
   font-size: 11px;
+  margin-bottom: 4px;
+}
+
+/* Winamp Visualizer Canvas */
+.visualizer-bar {
+  width: 100%;
+  height: 35px;
+  background: #060e1d;
+  border: 1px solid #1e293b;
+  border-radius: 2px;
+  display: block;
 }
 
 .playlist-section {
   flex: 1;
-  min-height: 110px;
+  min-height: 90px;
   overflow-y: auto;
 }
 
@@ -247,6 +284,74 @@ body {
   font-size: 11px !important;
   padding: 3px 8px !important;
   white-space: nowrap;
+}
+
+/* Sound FX Grid */
+.sfx-box, .requests-queue-box {
+  background: #e6f0fa;
+  border: 1px solid #a3c4e8;
+  border-radius: 5px;
+  padding: 6px;
+  margin-top: 6px;
+}
+
+.sfx-title {
+  font-weight: bold;
+  font-size: 11px;
+  color: #1e3a8a;
+  margin-bottom: 5px;
+}
+
+.sfx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.sfx-btn {
+  background: linear-gradient(180deg, #ffffff 0%, #dbeafe 100%);
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #1e40af;
+  cursor: pointer;
+}
+
+.sfx-btn:active {
+  background: #93c5fd;
+}
+
+.requests-list {
+  list-style: none;
+  max-height: 90px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.requests-list li {
+  background: #fff;
+  border: 1px solid #bfdbfe;
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.accept-req-btn {
+  background: #22c55e;
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  cursor: pointer;
 }
 
 .mixer-box {
@@ -394,6 +499,16 @@ body {
   border-color: #2563eb;
 }
 
+.nudge-btn {
+  width: auto !important;
+  padding: 0 8px;
+  font-weight: bold;
+  background: linear-gradient(180deg, #fef08a 0%, #facc15 100%);
+  border-color: #eab308;
+  color: #713f12;
+  margin-left: auto;
+}
+
 .pop-wrapper {
   position: relative;
 }
@@ -476,10 +591,16 @@ body {
 }
 
 .primary-btn {
-  width: 100%;
   background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%) !important;
   color: #ffffff !important;
   border-color: #1d4ed8 !important;
+}
+
+.request-btn {
+  background: linear-gradient(180deg, #fbcfe8 0%, #f472b6 100%) !important;
+  color: #831843 !important;
+  border-color: #ec4899 !important;
+  font-size: 11px;
 }
 
 .on-air-btn {
@@ -502,10 +623,6 @@ body {
   display: flex;
   gap: 4px;
   margin-top: 5px;
-}
-
-.btn-group .y2k-btn {
-  flex: 1;
 }
 
 .broadcast-tools {

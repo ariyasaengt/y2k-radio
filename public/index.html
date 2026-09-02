@@ -7,7 +7,10 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="desktop-wrap">
+  <!-- แคนวาสเอฟเฟกต์ละอองวิบวับ Glitter -->
+  <canvas id="glitter-canvas"></canvas>
+
+  <div id="main-app-window" class="desktop-wrap">
     <!-- แถบซ้าย: ควบคุมสถานีวิทยุ -->
     <aside class="window-pane side-bar">
       <div class="window-header">
@@ -15,7 +18,6 @@
         <span class="title">Radio Controller</span>
       </div>
       
-      <!-- ป้ายสถานะสถานีหลักและจำนวนคนออนไลน์ -->
       <div class="user-badge">
         <div class="avatar-box">📻</div>
         <div class="user-meta">
@@ -28,33 +30,37 @@
       </div>
 
       <div class="side-content">
+        <!-- กล่อง Now Playing พร้อม Visualizer -->
         <div class="section-box">
           <div class="section-title">Now Playing (Main)</div>
           <div class="now-playing-box">
             <div id="track-title" class="track-title">รอเริ่มรายการ</div>
             <div id="track-artist" class="track-sub">Offline</div>
+            
+            <!-- Winamp Visualizer Canvas -->
+            <canvas id="visualizer-canvas" class="visualizer-bar" width="280" height="35"></canvas>
           </div>
-          <button id="btn-listen" class="y2k-btn primary-btn">▶ ฟังสถานีหลัก</button>
+          <div class="btn-group">
+            <button id="btn-listen" class="y2k-btn primary-btn flex-1">▶ ฟังสถานีหลัก</button>
+            <button id="btn-open-request-modal" class="y2k-btn request-btn">📝 ขอเพลง</button>
+          </div>
         </div>
 
         <div class="section-box tuner-box">
           <div class="section-title">Thai Radio Tuner (สถานีวิทยุไทย)</div>
           <select id="backup-station-select" class="y2k-select">
             <option value="">-- เลือกคลื่นวิทยุไทยยอดนิยม --</option>
-            
             <optgroup label="🎵 เพลงสตริง / สากลฮิต">
               <option value="https://media.onair.one:8170/media">PASSION FM 8170 (เพลงฮิตติดชาร์ต)</option>
               <option value="https://media.onair.one:8170/ColorMusic">ColorMusic Thailand (เพลงไทยสบายๆ)</option>
               <option value="https://media.onair.one:8170/DAB1">FUNG Live 8170 (ฟังสบายตลอดวัน)</option>
               <option value="https://stream.zeno.fm/0r0xa792kwzuv">CityPop & 80s-90s Retro Hits</option>
             </optgroup>
-
             <optgroup label="🌾 ลูกทุ่ง / หมอลำ / เพื่อชีวิต">
               <option value="https://media.onair.one:8170/Looktung">ลูกทุ่ง เอฟเอ็ม (เพลงลูกทุ่งยอดฮิต)</option>
               <option value="https://media.onair.one:8170/Life">เพื่อชีวิต เรดิโอ (เพลงเพื่อชีวิตอมตะ)</option>
               <option value="https://media.onair.one:8170/Isan">อีสานเรดิโอ (หมอลำ & เพลงลูกทุ่งอีสาน)</option>
             </optgroup>
-
             <optgroup label="📻 ข่าวสาร / จราจร / สาระ">
               <option value="https://cdn-th2.login.in.th/shoutcast/8420">สถานีวิทยุกระจายเสียงแห่งประเทศไทย (สวท.)</option>
               <option value="https://media.onair.one:8170/News">Thai News Talk (รายงานข่าว & สาระ)</option>
@@ -70,6 +76,7 @@
           </ul>
         </div>
 
+        <!-- กล่องสำหรับดีเจ -->
         <div class="section-box dj-panel">
           <div class="section-title">DJ Booth (Admin)</div>
           
@@ -83,6 +90,7 @@
               <button type="button" id="btn-dj-logout" class="y2k-btn logout-btn">🚪 ออกจากระบบ</button>
             </div>
 
+            <!-- ตั้งหัวข้อประจำวัน -->
             <div class="topic-setter-box">
               <span class="sub-label">✏️ หัวข้อจัดรายการวันนี้:</span>
               <div class="input-row">
@@ -102,10 +110,28 @@
                 <button id="btn-play-music" class="y2k-btn">🎵 เปิดเพลงถัดไป</button>
               </div>
 
+              <!-- 📢 แผงซาวด์เอฟเฟกต์ดีเจ (Sound Effects) -->
+              <div class="sfx-box">
+                <div class="sfx-title">📢 DJ Sound FX</div>
+                <div class="sfx-grid">
+                  <button type="button" class="sfx-btn" data-sound="airhorn">📯 แตร Horn</button>
+                  <button type="button" class="sfx-btn" data-sound="rimshot">🥁 ตึ่งโป๊ะ!</button>
+                  <button type="button" class="sfx-btn" data-sound="laugh">😂 ขำก๊าก</button>
+                  <button type="button" class="sfx-btn" data-sound="sad">💔 แป่ววว</button>
+                </div>
+              </div>
+
+              <!-- รายการเพลงที่มีคนขอเข้ามา -->
+              <div class="requests-queue-box">
+                <div class="sfx-title">📥 เพลงที่คนขอเข้ามา (<span id="req-count">0</span>)</div>
+                <ul id="requests-list" class="requests-list">
+                  <li>ยังไม่มีคำขอเพลง</li>
+                </ul>
+              </div>
+
               <!-- Mixer ปรับระดับเสียง -->
               <div class="mixer-box">
                 <div class="mixer-title">🎚️ DJ Audio Mixer</div>
-                
                 <div class="slider-item">
                   <div class="slider-header">
                     <span>🎵 เสียงเพลง (Music)</span>
@@ -113,7 +139,6 @@
                   </div>
                   <input type="range" id="slider-music-vol" class="y2k-range" min="0" max="100" value="80">
                 </div>
-
                 <div class="slider-item">
                   <div class="slider-header">
                     <span>🎙️ เสียงไมค์ (Mic)</span>
@@ -121,7 +146,6 @@
                   </div>
                   <input type="range" id="slider-mic-vol" class="y2k-range" min="0" max="150" value="100">
                 </div>
-
                 <button type="button" id="btn-ducking" class="y2k-btn ducking-btn">🔉 หรี่เพลงพูดไมค์ (Ducking)</button>
               </div>
             </div>
@@ -137,7 +161,6 @@
         <span class="title">Live Chat & Shoutbox</span>
       </div>
 
-      <!-- ป้ายหัวข้อใหญ่ประจำวัน -->
       <div class="topic-banner">
         <div class="topic-tag">🌟 TOPIC TODAY</div>
         <div id="display-topic" class="topic-text">กำลังโหลดหัวข้อ...</div>
@@ -149,7 +172,7 @@
 
       <div id="chat-logs" class="chat-logs"></div>
 
-      <!-- กล่องพิมพ์แชท -->
+      <!-- กล่องพิมพ์แชท + ปุ่ม Nudge -->
       <div class="chat-input-area">
         <div id="typing-indicator" class="typing-status hide"></div>
 
@@ -170,6 +193,11 @@
             🎨
             <input type="color" id="chat-color" value="#000000">
           </label>
+
+          <!-- ปุ่มสะกิด MSN Nudge -->
+          <button type="button" id="btn-nudge" class="tool-btn nudge-btn" title="ส่งสัญญาณสะกิด MSN สั่นหน้าจอ!">
+            💥 สะกิด
+          </button>
         </div>
 
         <div class="input-row">
@@ -183,6 +211,30 @@
         <span>Retro Sound Wave 2000 • High Fidelity Stereo</span>
       </div>
     </main>
+  </div>
+
+  <!-- ป๊อปอัปขอเพลง (Song Request Modal) -->
+  <div id="request-modal" class="y2k-modal-overlay hide">
+    <div class="window-pane modal-box">
+      <div class="window-header">
+        <span class="icon-flower">📝</span>
+        <span class="title">กล่องขอเพลงถึงดีเจ</span>
+      </div>
+      <div class="modal-body">
+        <div>
+          <label style="font-weight: bold; font-size: 11px;">ชื่อเพลง + ศิลปิน:</label>
+          <input type="text" id="req-song-input" class="y2k-input" placeholder="เช่น วัดใจ - Silly Fools" style="width: 100%; margin-top: 3px;">
+        </div>
+        <div>
+          <label style="font-weight: bold; font-size: 11px;">ข้อความฝากถึงดีเจ / คนพิเศษ:</label>
+          <input type="text" id="req-note-input" class="y2k-input" placeholder="เช่น มอบให้คนข้างๆ..." style="width: 100%; margin-top: 3px;">
+        </div>
+        <div class="modal-actions">
+          <button id="req-btn-submit" class="y2k-btn">ส่งคำขอเพลง 🎵</button>
+          <button id="req-btn-cancel" class="y2k-btn">ยกเลิก</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ป๊อปอัปใส่รหัสดีเจ -->
@@ -205,6 +257,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
   const socket = io();
 
+  const mainAppWindow = document.getElementById('main-app-window');
   const stationStatus = document.getElementById('station-status');
   const onlineUsersBadge = document.getElementById('online-users-badge');
   const chatLogs = document.getElementById('chat-logs');
@@ -31,6 +32,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const djTopicInput = document.getElementById('dj-topic-input');
   const btnSaveTopic = document.getElementById('btn-save-topic');
 
+  // Nudge & Sound FX
+  const btnNudge = document.getElementById('btn-nudge');
+  const sfxButtons = document.querySelectorAll('.sfx-btn');
+
+  // Request Modal Elements
+  const btnOpenRequestModal = document.getElementById('btn-open-request-modal');
+  const requestModal = document.getElementById('request-modal');
+  const reqSongInput = document.getElementById('req-song-input');
+  const reqNoteInput = document.getElementById('req-note-input');
+  const reqBtnSubmit = document.getElementById('req-btn-submit');
+  const reqBtnCancel = document.getElementById('req-btn-cancel');
+  const requestsList = document.getElementById('requests-list');
+  const reqCountBadge = document.getElementById('req-count');
+
   // Mixer Sliders
   const sliderMusicVol = document.getElementById('slider-music-vol');
   const sliderMicVol = document.getElementById('slider-mic-vol');
@@ -58,12 +73,303 @@ document.addEventListener('DOMContentLoaded', () => {
   let isDucking = false;
   let previousMusicVol = 80;
 
-  // --- ระบบเสียงแจ้งเตือนข้อความเด้งเบาๆ สไตล์ MSN Pop ---
+  // ==========================================
+  // ✨ 1. Y2K Glitter Star Cursor Trail
+  // ==========================================
+  const glitterCanvas = document.getElementById('glitter-canvas');
+  const gCtx = glitterCanvas.getContext('2d');
+  let particles = [];
+
+  function resizeCanvas() {
+    glitterCanvas.width = window.innerWidth;
+    glitterCanvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  window.addEventListener('mousemove', (e) => {
+    for (let i = 0; i < 3; i++) {
+      particles.push({
+        x: e.clientX + (Math.random() - 0.5) * 12,
+        y: e.clientY + (Math.random() - 0.5) * 12,
+        size: Math.random() * 4 + 2,
+        color: `hsl(${Math.random() * 60 + 180}, 100%, 75%)`,
+        alpha: 1,
+        vy: Math.random() * 1.5 + 0.5,
+        vx: (Math.random() - 0.5) * 1
+      });
+    }
+  });
+
+  function animateGlitter() {
+    gCtx.clearRect(0, 0, glitterCanvas.width, glitterCanvas.height);
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.alpha -= 0.025;
+
+      gCtx.fillStyle = p.color;
+      gCtx.globalAlpha = Math.max(0, p.alpha);
+      gCtx.beginPath();
+      // วาดรูปดาวประกาย 4 แฉก
+      gCtx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+      gCtx.fill();
+
+      if (p.alpha <= 0) {
+        particles.splice(i, 1);
+        i--;
+      }
+    }
+    requestAnimationFrame(animateGlitter);
+  }
+  animateGlitter();
+
+  // ==========================================
+  // 🔊 2. Web Audio & Visualizer Setup
+  // ==========================================
+  let listenAudioCtx = null;
+  let musicGainNode = null;
+  let micGainNode = null;
+  let analyserNode = null;
+  let currentMusicSource = null;
+
+  function initAudioContext() {
+    if (!listenAudioCtx) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      listenAudioCtx = new AudioContext();
+
+      analyserNode = listenAudioCtx.createAnalyser();
+      analyserNode.fftSize = 64;
+
+      musicGainNode = listenAudioCtx.createGain();
+      musicGainNode.gain.value = 0.8;
+      musicGainNode.connect(analyserNode);
+
+      micGainNode = listenAudioCtx.createGain();
+      micGainNode.gain.value = 1.0;
+      micGainNode.connect(analyserNode);
+
+      analyserNode.connect(listenAudioCtx.destination);
+      startVisualizer();
+    }
+  }
+
+  // Visualizer Canvas แบบ Winamp Bars
+  const vCanvas = document.getElementById('visualizer-canvas');
+  const vCtx = vCanvas ? vCanvas.getContext('2d') : null;
+
+  function startVisualizer() {
+    if (!vCtx || !analyserNode) return;
+    const bufferLength = analyserNode.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    function render() {
+      requestAnimationFrame(render);
+      analyserNode.getByteFrequencyData(dataArray);
+
+      vCtx.fillStyle = '#060e1d';
+      vCtx.fillRect(0, 0, vCanvas.width, vCanvas.height);
+
+      const barWidth = (vCanvas.width / bufferLength) * 1.5;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const barHeight = (dataArray[i] / 255) * vCanvas.height;
+
+        // Gradient สไตล์ Winamp: เขียว -> เหลือง -> แดง
+        const grad = vCtx.createLinearGradient(0, vCanvas.height, 0, 0);
+        grad.addColorStop(0, '#22c55e');
+        grad.addColorStop(0.7, '#eab308');
+        grad.addColorStop(1, '#ef4444');
+
+        vCtx.fillStyle = grad;
+        vCtx.fillRect(x, vCanvas.height - barHeight, barWidth - 1, barHeight);
+        x += barWidth;
+      }
+    }
+    render();
+  }
+
+  // ==========================================
+  // 💥 3. ระบบ MSN Nudge (สั่นหน้าจอ)
+  // ==========================================
+  function playNudgeSound() {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(80, ctx.currentTime + 0.35);
+
+      gain.gain.setValueAtTime(0.25, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.38);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.4);
+    } catch(e){}
+  }
+
+  let canNudge = true;
+  if (btnNudge) {
+    btnNudge.addEventListener('click', () => {
+      if (!canNudge) return alert("กรุณารอ 5 วินาทีก่อนส่งสะกิดใหม่อีกครั้ง!");
+      const user = usernameInput.value.trim() || 'Guest';
+      socket.emit('send-nudge', user);
+      canNudge = false;
+      setTimeout(() => canNudge = true, 5000);
+    });
+  }
+
+  socket.on('receive-nudge', (data) => {
+    // สั่นหน้าต่าง
+    if (mainAppWindow) {
+      mainAppWindow.classList.remove('nudge-shake');
+      void mainAppWindow.offsetWidth; // Force Reflow
+      mainAppWindow.classList.add('nudge-shake');
+    }
+    playNudgeSound();
+
+    // แสดงข้อความเตือนในแชท
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = `<div style="color: #b91c1c; font-weight: bold; font-size: 11px;">💥 ${data.user} ได้ส่งสัญญาณสะกิดหน้าจอคุณ!</div>`;
+    chatLogs.appendChild(bubble);
+    chatLogs.scrollTop = chatLogs.scrollHeight;
+  });
+
+  // ==========================================
+  // 📢 4. ระบบซาวด์เอฟเฟกต์ดีเจ (Sound FX)
+  // ==========================================
+  sfxButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const soundType = btn.getAttribute('data-sound');
+      socket.emit('dj-play-sfx', soundType);
+    });
+  });
+
+  socket.on('play-sfx', (type) => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      if (type === 'airhorn') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(466.16, ctx.currentTime); // Bb4
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.65);
+      } else if (type === 'rimshot') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(250, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.4, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+      } else if (type === 'sad') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(320, ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(140, ctx.currentTime + 0.6);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.65);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.7);
+      } else if (type === 'laugh') {
+        // ซินธิไซส์โน้ตเด้งๆ ขำๆ
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(500, ctx.currentTime);
+        osc.frequency.setValueAtTime(700, ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(450, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.45);
+      }
+    } catch(e){}
+  });
+
+  // ==========================================
+  // 📝 5. ระบบขอเพลง (Song Requests)
+  // ==========================================
+  if (btnOpenRequestModal) {
+    btnOpenRequestModal.addEventListener('click', () => {
+      reqSongInput.value = '';
+      reqNoteInput.value = '';
+      requestModal.classList.remove('hide');
+      reqSongInput.focus();
+    });
+  }
+
+  if (reqBtnCancel) {
+    reqBtnCancel.addEventListener('click', () => requestModal.classList.add('hide'));
+  }
+
+  if (reqBtnSubmit) {
+    reqBtnSubmit.addEventListener('click', () => {
+      const song = reqSongInput.value.trim();
+      const note = reqNoteInput.value.trim();
+      const user = usernameInput.value.trim() || 'ผู้ฟังทางบ้าน';
+      if (!song) return alert("กรุณาใส่ชื่อเพลงด้วยครับ");
+
+      socket.emit('submit-song-request', { user, song, note });
+      requestModal.classList.add('hide');
+      alert("ส่งคำขอเพลงถึงดีเจเรียบร้อยแล้ว! 📻");
+    });
+  }
+
+  socket.on('requests-update', (reqs) => {
+    if (reqCountBadge) reqCountBadge.textContent = reqs.length;
+    if (!requestsList) return;
+    requestsList.innerHTML = '';
+    if (reqs.length === 0) {
+      requestsList.innerHTML = '<li>ยังไม่มีคำขอเพลง</li>';
+      return;
+    }
+    reqs.forEach(r => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div style="overflow:hidden;text-overflow:ellipsis;">
+          <strong>${r.song}</strong> (${r.user})<br>
+          <span style="color:#666;font-size:10px;">${r.note || '-'}</span>
+        </div>
+        <button class="accept-req-btn" data-id="${r.id}">✅ รับ</button>
+      `;
+      requestsList.appendChild(li);
+    });
+
+    // ปุ่มรับคำขอเพลงของดีเจ
+    requestsList.querySelectorAll('.accept-req-btn').forEach(b => {
+      b.onclick = () => {
+        const id = parseInt(b.getAttribute('data-id'));
+        socket.emit('dj-accept-request', id);
+      };
+    });
+  });
+
+  // ==========================================
+  // 🔔 6. เสียง Pop ข้อความเข้า
+  // ==========================================
   function playNotificationSound() {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       const ctx = new AudioCtx();
-      
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
@@ -76,42 +382,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
       osc.connect(gain);
       gain.connect(ctx.destination);
-
       osc.start();
       osc.stop(ctx.currentTime + 0.16);
-    } catch (e) {
-      // ข้ามกรณีเบราว์เซอร์ยังบล็อก
-    }
+    } catch (e) {}
   }
 
-  // --- รับจำนวนคนออนไลน์แบบเรียลไทม์ ---
+  // รับจำนวนคนออนไลน์
   socket.on('online-users-count', (count) => {
-    if (onlineUsersBadge) {
-      onlineUsersBadge.textContent = `👥 ${count} คน`;
-    }
+    if (onlineUsersBadge) onlineUsersBadge.textContent = `👥 ${count} คน`;
   });
 
-  // --- Web Audio Context & GainNodes ---
-  let listenAudioCtx = null;
-  let musicGainNode = null;
-  let micGainNode = null;
-  let currentMusicSource = null;
-
-  function initAudioContext() {
-    if (!listenAudioCtx) {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      listenAudioCtx = new AudioContext();
-
-      musicGainNode = listenAudioCtx.createGain();
-      musicGainNode.gain.value = 0.8;
-      musicGainNode.connect(listenAudioCtx.destination);
-
-      micGainNode = listenAudioCtx.createGain();
-      micGainNode.gain.value = 1.0;
-      micGainNode.connect(listenAudioCtx.destination);
-    }
-  }
-
+  // ปรับระดับเสียง
   socket.on('volume-update', (vols) => {
     if (listenAudioCtx) {
       if (musicGainNode && vols.music !== undefined) {
@@ -171,7 +452,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- หัวข้อประจำวัน ---
   socket.on('topic-update', (topic) => {
     if (displayTopic) displayTopic.textContent = topic;
   });
@@ -185,7 +465,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- Backup Radio Tuner ---
   if (backupStationSelect) {
     backupStationSelect.addEventListener('change', (e) => {
       const streamUrl = e.target.value;
@@ -199,7 +478,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- สถานะ On Air / Offline ---
   socket.on('dj-status-update', (isLive) => {
     isShowLive = isLive;
     if (isLive) {
@@ -237,7 +515,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- สิทธิ์ดีเจ และ Logout ---
   if (usernameInput) {
     if (localStorage.getItem('saved_username')) {
       usernameInput.value = localStorage.getItem('saved_username');
@@ -320,18 +597,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- แชท และ Typing Indicator ---
+  // Typing Indicator
   let typingTimeout = null;
-
   if (chatInput) {
     chatInput.addEventListener('input', () => {
       const user = usernameInput.value.trim() || 'Guest';
       socket.emit('typing-start', user);
-
       clearTimeout(typingTimeout);
-      typingTimeout = setTimeout(() => {
-        socket.emit('typing-stop');
-      }, 2000);
+      typingTimeout = setTimeout(() => socket.emit('typing-stop'), 2000);
     });
   }
 
@@ -465,7 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // --- Main Audio Player ---
+  // Main Audio Player
   let isBroadcastingMic = false;
   let mediaRecorder = null;
   let playlist = [];
