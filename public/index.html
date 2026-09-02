@@ -33,7 +33,6 @@
           <button id="btn-listen" class="y2k-btn primary-btn">▶ ฟังสถานีหลัก</button>
         </div>
 
-        <!-- กล่องคลื่นวิทยุไทย (รวมคลื่นฮิตแยกหมวดหมู่) -->
         <div class="section-box tuner-box">
           <div class="section-title">Thai Radio Tuner (สถานีวิทยุไทย)</div>
           <select id="backup-station-select" class="y2k-select">
@@ -75,13 +74,11 @@
           </div>
 
           <div id="dj-controls-section" class="dj-controls hide">
-            <!-- ปุ่มสถานะและออกจากระบบ -->
             <div class="dj-header-bar">
               <span class="dj-badge-status">🎧 สิทธิ์: ดีเจออกอากาศ</span>
               <button type="button" id="btn-dj-logout" class="y2k-btn logout-btn">🚪 ออกจากระบบ</button>
             </div>
 
-            <!-- ตั้งหัวข้อประจำวัน -->
             <div class="topic-setter-box">
               <span class="sub-label">✏️ หัวข้อจัดรายการวันนี้:</span>
               <div class="input-row">
@@ -94,7 +91,6 @@
               <button id="btn-show-toggle" class="y2k-btn on-air-btn">🔴 เริ่มจัดรายการ (Go Live)</button>
             </div>
 
-            <!-- เครื่องมือและมิกเซอร์ของดีเจ -->
             <div id="dj-broadcast-tools" class="broadcast-tools hide">
               <input type="file" id="dj-file-input" accept="audio/*" multiple>
               <div class="btn-group">
@@ -102,7 +98,7 @@
                 <button id="btn-play-music" class="y2k-btn">🎵 เปิดเพลงถัดไป</button>
               </div>
 
-              <!-- 🎚️ กล่อง Mixer ปรับระดับเสียง -->
+              <!-- Mixer ปรับระดับเสียง -->
               <div class="mixer-box">
                 <div class="mixer-title">🎚️ DJ Audio Mixer</div>
                 
@@ -149,14 +145,10 @@
 
       <div id="chat-logs" class="chat-logs"></div>
 
+      <!-- โครงสร้างกล่องพิมพ์แชทที่จัดแถวถูกต้อง -->
       <div class="chat-input-area">
-        <div class="chat-input-area">
-        <!-- แถบแสดงสถานะกำลังพิมพ์สไตล์ MSN -->
         <div id="typing-indicator" class="typing-status hide"></div>
 
-        <div class="chat-toolbar">
-          <button type="button" id="btn-bold" class="tool-btn"><b>B</b></button>
-          
         <div class="chat-toolbar">
           <button type="button" id="btn-bold" class="tool-btn"><b>B</b></button>
           <button type="button" id="btn-italic" class="tool-btn"><i>I</i></button>
@@ -189,6 +181,7 @@
     </main>
   </div>
 
+  <!-- ป๊อปอัปใส่รหัสดีเจ -->
   <div id="dj-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -208,6 +201,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
