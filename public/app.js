@@ -165,6 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // แสดงผลข้อความแชท พร้อมป้ายยศดีเจ
   socket.on('chat-message', (data) => {
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble';
@@ -175,8 +176,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const textStyle = s.italic ? 'italic' : 'normal';
     const textDecor = s.underline ? 'underline' : 'none';
 
+    // ถ้าเป็นดีเจ ให้แสดงป้ายยศพิเศษต่อท้ายชื่อ
+    const djBadgeHTML = data.isDJ 
+      ? `<span class="dj-badge-tag">🎧 DJ Admin</span>` 
+      : '';
+
     bubble.innerHTML = `
-      <div class="meta">${data.user} <span style="font-weight:normal;color:#888;">(${data.time})</span>:</div>
+      <div class="meta">
+        <span class="user-name">${data.user}</span>${djBadgeHTML}
+        <span style="font-weight:normal;color:#888;font-size:11px;">(${data.time})</span>:
+      </div>
       <div class="text" style="color: ${textColor} !important; font-weight: ${textWeight} !important; font-style: ${textStyle} !important; text-decoration: ${textDecor} !important;">
         ${data.text}
       </div>

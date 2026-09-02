@@ -22,12 +22,14 @@ io.on('connection', (socket) => {
   socket.emit('track-update', currentTrack);
   socket.emit('playlist-update', playlist);
 
-  // ระบบแชท (รองรับสี/ตัวหนา/เอียง)
+
+  // ระบบส่งข้อความแชท (ตรวจจับยศดีเจจากเซิร์ฟเวอร์)
   socket.on('chat-message', (data) => {
     io.emit('chat-message', {
       user: data.user || 'Guest',
       text: data.text,
       style: data.style || {},
+      isDJ: socket.isDJ || false, // ตรวจสอบว่าคนส่งคือดีเจที่ยืนยันรหัสผ่านแล้วหรือไม่
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
   });
