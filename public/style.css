@@ -6,7 +6,6 @@
   font-size: 13px;
 }
 
-/* แคนวาสละอองวิบวับ Glitter คลุมเต็มจอ */
 #glitter-canvas {
   position: fixed;
   top: 0;
@@ -15,6 +14,33 @@
   height: 100vh;
   pointer-events: none;
   z-index: 99999;
+}
+
+/* คอนเทนเนอร์แสดงปฏิกิริยาหัวใจลอย */
+.heart-container {
+  position: fixed;
+  bottom: 20px;
+  right: 25px;
+  width: 100px;
+  height: 300px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 99998;
+}
+
+.floating-heart {
+  position: absolute;
+  bottom: 0;
+  right: 20px;
+  font-size: 24px;
+  animation: floatUp 2.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  user-select: none;
+}
+
+@keyframes floatUp {
+  0% { transform: translateY(0) scale(0.6) rotate(0deg); opacity: 1; }
+  50% { transform: translateY(-120px) scale(1.2) rotate(-15deg); opacity: 0.9; }
+  100% { transform: translateY(-260px) scale(1) rotate(15deg); opacity: 0; }
 }
 
 body {
@@ -37,7 +63,6 @@ body {
   transition: transform 0.05s ease;
 }
 
-/* เอฟเฟกต์สะกิดสั่นสะเทือนสไตล์ MSN Nudge */
 .nudge-shake {
   animation: msnShake 0.45s ease-in-out;
 }
@@ -175,7 +200,30 @@ body {
   margin-bottom: 4px;
 }
 
-/* Winamp Visualizer Canvas */
+.track-timer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #6ee7b7;
+  margin-bottom: 6px;
+}
+
+.track-progress-bg {
+  flex: 1;
+  height: 4px;
+  background: #1e293b;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.track-progress-fill {
+  width: 0%;
+  height: 100%;
+  background: #10b981;
+  transition: width 0.3s linear;
+}
+
 .visualizer-bar {
   width: 100%;
   height: 35px;
@@ -187,7 +235,7 @@ body {
 
 .playlist-section {
   flex: 1;
-  min-height: 90px;
+  min-height: 80px;
   overflow-y: auto;
 }
 
@@ -209,10 +257,18 @@ body {
   flex: 1;
 }
 
+.marquee-ticker {
+  background: #1e3a8a;
+  color: #93c5fd;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-bottom: 1px solid #3b82f6;
+}
+
 .topic-banner {
   background: linear-gradient(90deg, #dbeafe 0%, #bfdbfe 100%);
   border-bottom: 2px solid #60a5fa;
-  padding: 8px 12px;
+  padding: 6px 12px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -229,7 +285,7 @@ body {
 }
 
 .topic-text {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #1e3a8a;
   white-space: nowrap;
@@ -237,7 +293,19 @@ body {
   text-overflow: ellipsis;
 }
 
-.topic-setter-box {
+.pinned-banner {
+  background: #fef3c7;
+  border-bottom: 1px solid #f59e0b;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #92400e;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.topic-setter-box, .moderation-box {
   background: #f0f7ff;
   border: 1px dashed #93c5fd;
   border-radius: 4px;
@@ -286,7 +354,12 @@ body {
   white-space: nowrap;
 }
 
-/* Sound FX Grid */
+.danger-btn {
+  background: linear-gradient(180deg, #fee2e2 0%, #fca5a5 100%) !important;
+  color: #991b1b !important;
+  border: 1px solid #ef4444 !important;
+}
+
 .sfx-box, .requests-queue-box {
   background: #e6f0fa;
   border: 1px solid #a3c4e8;
@@ -449,6 +522,14 @@ body {
   font-size: 11px;
 }
 
+.msn-status-tag {
+  color: #64748b;
+  font-style: italic;
+  font-weight: normal;
+  font-size: 10px;
+  margin-left: 4px;
+}
+
 .chat-bubble .text {
   font-size: 13px;
   margin-top: 1px;
@@ -497,6 +578,11 @@ body {
 .tool-btn.active {
   background: #bfdbfe;
   border-color: #2563eb;
+}
+
+.heart-btn {
+  background: linear-gradient(180deg, #fce7f3 0%, #fbcfe8 100%);
+  border-color: #f472b6;
 }
 
 .nudge-btn {
@@ -694,9 +780,7 @@ body {
   font-weight: bold;
 }
 
-/* ========================================================
-   📱 Responsive Mobile View
-   ======================================================== */
+/* Responsive View */
 @media (max-width: 768px) {
   body {
     height: auto !important;
@@ -747,7 +831,7 @@ body {
     flex-wrap: wrap;
   }
 
-  #username {
+  #username, #userstatus {
     width: 100% !important;
   }
 

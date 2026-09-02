@@ -7,17 +7,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const chatLogs = document.getElementById('chat-logs');
   const chatInput = document.getElementById('chat-message');
   const usernameInput = document.getElementById('username');
+  const userstatusInput = document.getElementById('userstatus');
   const btnSend = document.getElementById('btn-send');
   const trackTitle = document.getElementById('track-title');
   const trackArtist = document.getElementById('track-artist');
+  const trackTimeCurrent = document.getElementById('track-time-current');
+  const trackTimeTotal = document.getElementById('track-time-total');
+  const trackProgressFill = document.getElementById('track-progress-fill');
   const playlistContainer = document.getElementById('playlist-container');
   const btnListen = document.getElementById('btn-listen');
   const displayTopic = document.getElementById('display-topic');
+  const pinnedBanner = document.getElementById('pinned-banner');
+  const pinnedText = document.getElementById('pinned-text');
   const typingIndicator = document.getElementById('typing-indicator');
 
   // Backup Radio Tuner
   const backupStationSelect = document.getElementById('backup-station-select');
   const backupAudioPlayer = document.getElementById('backup-audio-player');
+  let currentHls = null;
 
   // DJ Elements
   const btnDjLogin = document.getElementById('btn-dj-login');
@@ -31,9 +38,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnMic = document.getElementById('btn-mic');
   const djTopicInput = document.getElementById('dj-topic-input');
   const btnSaveTopic = document.getElementById('btn-save-topic');
+  const djPinInput = document.getElementById('dj-pin-input');
+  const btnPinMsg = document.getElementById('btn-pin-msg');
+  const btnUnpinMsg = document.getElementById('btn-unpin-msg');
+  const btnClearChat = document.getElementById('btn-clear-chat');
 
-  // Nudge & Sound FX
+  // Nudge, Reactions, SFX
   const btnNudge = document.getElementById('btn-nudge');
+  const btnHeartReaction = document.getElementById('btn-heart-reaction');
+  const heartContainer = document.getElementById('heart-container');
   const sfxButtons = document.querySelectorAll('.sfx-btn');
 
   // Request Modal Elements
@@ -74,7 +87,42 @@ document.addEventListener('DOMContentLoaded', () => {
   let previousMusicVol = 80;
 
   // ==========================================
-  // ✨ 1. Y2K Glitter Star Cursor Trail
+  // 📻 ระบบเล่นคลื่นวิทยุไทยสด (รองรับทั้ง MP3 และ HLS)
+  // ==========================================
+  if (backupStationSelect) {
+    backupStationSelect.addEventListener('change', (e) => {
+      const streamUrl = e.target.value;
+      if (!streamUrl) {
+        if (currentHls) { currentHls.destroy(); currentHls = null; }
+        backupAudioPlayer.pause();
+        backupAudioPlayer.src = '';
+        return;
+      }
+
+      // ตรวจสอบว่าเป็นสตรีม HLS (.m3u8) หรือไม่
+      if (streamUrl.includes('.m3u8')) {
+        if (Hls.isSupported()) {
+          if (currentHls) currentHls.destroy();
+          currentHls = new Hls();
+          currentHls.loadSource(streamUrl);
+          currentHls.attachMedia(backupAudioPlayer);
+          currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
+            backupAudioPlayer.play().catch(console.warn);
+          });
+        } else if (backupAudioPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+          backupAudioPlayer.src = streamUrl;
+          backupAudioPlayer.play().catch(console.warn);
+        }
+      } else {
+        if (currentHls) { currentHls.destroy(); currentHls = null; }
+        backupAudioPlayer.src = streamUrl;
+        backupAudioPlayer.play().catch(console.warn);
+      }
+    });
+  }
+
+  // ==========================================
+  // ✨ Y2K Glitter Star Cursor
   // ==========================================
   const glitterCanvas = document.getElementById('glitter-canvas');
   const gCtx = glitterCanvas.getContext('2d');
@@ -112,7 +160,6 @@ document.addEventListener('DOMContentLoaded', () => {
       gCtx.fillStyle = p.color;
       gCtx.globalAlpha = Math.max(0, p.alpha);
       gCtx.beginPath();
-      // วาดรูปดาวประกาย 4 แฉก
       gCtx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
       gCtx.fill();
 
@@ -126,7 +173,26 @@ document.addEventListener('DOMContentLoaded', () => {
   animateGlitter();
 
   // ==========================================
-  // 🔊 2. Web Audio & Visualizer Setup
+  // 💖 Floating Heart Reactions
+  // ==========================================
+  if (btnHeartReaction) {
+    btnHeartReaction.addEventListener('click', () => {
+      socket.emit('send-reaction', '❤️');
+    });
+  }
+
+  socket.on('receive-reaction', (type) => {
+    if (!heartContainer) return;
+    const heart = document.createElement('div');
+    heart.className = 'floating-heart';
+    heart.textContent = type;
+    heart.style.right = `${Math.random() * 60 + 10}px`;
+    heartContainer.appendChild(heart);
+    setTimeout(() => heart.remove(), 2300);
+  });
+
+  // ==========================================
+  // 🔊 Web Audio & Winamp Visualizer
   // ==========================================
   let listenAudioCtx = null;
   let musicGainNode = null;
@@ -155,7 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Visualizer Canvas แบบ Winamp Bars
   const vCanvas = document.getElementById('visualizer-canvas');
   const vCtx = vCanvas ? vCanvas.getContext('2d') : null;
 
@@ -176,8 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
       for (let i = 0; i < bufferLength; i++) {
         const barHeight = (dataArray[i] / 255) * vCanvas.height;
-
-        // Gradient สไตล์ Winamp: เขียว -> เหลือง -> แดง
         const grad = vCtx.createLinearGradient(0, vCanvas.height, 0, 0);
         grad.addColorStop(0, '#22c55e');
         grad.addColorStop(0.7, '#eab308');
@@ -192,7 +255,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // 💥 3. ระบบ MSN Nudge (สั่นหน้าจอ)
+  // 💥 MSN Nudge & Sound FX
   // ==========================================
   function playNudgeSound() {
     try {
@@ -227,15 +290,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   socket.on('receive-nudge', (data) => {
-    // สั่นหน้าต่าง
     if (mainAppWindow) {
       mainAppWindow.classList.remove('nudge-shake');
-      void mainAppWindow.offsetWidth; // Force Reflow
+      void mainAppWindow.offsetWidth;
       mainAppWindow.classList.add('nudge-shake');
     }
     playNudgeSound();
 
-    // แสดงข้อความเตือนในแชท
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble';
     bubble.innerHTML = `<div style="color: #b91c1c; font-weight: bold; font-size: 11px;">💥 ${data.user} ได้ส่งสัญญาณสะกิดหน้าจอคุณ!</div>`;
@@ -243,9 +304,6 @@ document.addEventListener('DOMContentLoaded', () => {
     chatLogs.scrollTop = chatLogs.scrollHeight;
   });
 
-  // ==========================================
-  // 📢 4. ระบบซาวด์เอฟเฟกต์ดีเจ (Sound FX)
-  // ==========================================
   sfxButtons.forEach(btn => {
     btn.addEventListener('click', () => {
       const soundType = btn.getAttribute('data-sound');
@@ -262,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (type === 'airhorn') {
         osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(466.16, ctx.currentTime); // Bb4
+        osc.frequency.setValueAtTime(466.16, ctx.currentTime);
         gain.gain.setValueAtTime(0.3, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
         osc.connect(gain);
@@ -290,7 +348,6 @@ document.addEventListener('DOMContentLoaded', () => {
         osc.start();
         osc.stop(ctx.currentTime + 0.7);
       } else if (type === 'laugh') {
-        // ซินธิไซส์โน้ตเด้งๆ ขำๆ
         osc.type = 'square';
         osc.frequency.setValueAtTime(500, ctx.currentTime);
         osc.frequency.setValueAtTime(700, ctx.currentTime + 0.1);
@@ -306,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // 📝 5. ระบบขอเพลง (Song Requests)
+  // 📝 กล่องขอเพลง
   // ==========================================
   if (btnOpenRequestModal) {
     btnOpenRequestModal.addEventListener('click', () => {
@@ -354,7 +411,6 @@ document.addEventListener('DOMContentLoaded', () => {
       requestsList.appendChild(li);
     });
 
-    // ปุ่มรับคำขอเพลงของดีเจ
     requestsList.querySelectorAll('.accept-req-btn').forEach(b => {
       b.onclick = () => {
         const id = parseInt(b.getAttribute('data-id'));
@@ -364,7 +420,43 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // 🔔 6. เสียง Pop ข้อความเข้า
+  // 📌 ปักหมุดและล้างแชทโดยดีเจ
+  // ==========================================
+  if (btnPinMsg) {
+    btnPinMsg.addEventListener('click', () => {
+      const txt = djPinInput.value.trim();
+      if (!txt) return;
+      socket.emit('dj-pin-message', txt);
+      djPinInput.value = '';
+    });
+  }
+
+  if (btnUnpinMsg) {
+    btnUnpinMsg.addEventListener('click', () => {
+      socket.emit('dj-pin-message', '');
+    });
+  }
+
+  if (btnClearChat) {
+    btnClearChat.addEventListener('click', () => {
+      if (confirm("ต้องการล้างประวัติแชททั้งหมดใช่หรือไม่?")) {
+        socket.emit('dj-clear-chat');
+      }
+    });
+  }
+
+  socket.on('pinned-update', (msg) => {
+    if (!pinnedBanner || !pinnedText) return;
+    if (msg) {
+      pinnedText.textContent = msg;
+      pinnedBanner.classList.remove('hide');
+    } else {
+      pinnedBanner.classList.add('hide');
+    }
+  });
+
+  // ==========================================
+  // 🔔 เสียงแจ้งเตือนข้อความเด้ง
   // ==========================================
   function playNotificationSound() {
     try {
@@ -387,12 +479,10 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {}
   }
 
-  // รับจำนวนคนออนไลน์
   socket.on('online-users-count', (count) => {
     if (onlineUsersBadge) onlineUsersBadge.textContent = `👥 ${count} คน`;
   });
 
-  // ปรับระดับเสียง
   socket.on('volume-update', (vols) => {
     if (listenAudioCtx) {
       if (musicGainNode && vols.music !== undefined) {
@@ -462,19 +552,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!newTopic) return;
       socket.emit('dj-set-topic', newTopic);
       djTopicInput.value = '';
-    });
-  }
-
-  if (backupStationSelect) {
-    backupStationSelect.addEventListener('change', (e) => {
-      const streamUrl = e.target.value;
-      if (streamUrl) {
-        backupAudioPlayer.src = streamUrl;
-        backupAudioPlayer.play();
-      } else {
-        backupAudioPlayer.pause();
-        backupAudioPlayer.src = '';
-      }
     });
   }
 
@@ -622,9 +699,13 @@ document.addEventListener('DOMContentLoaded', () => {
       ? `<span class="dj-badge-tag">🎧 DJ Admin</span>` 
       : '';
 
+    const statusHTML = data.status 
+      ? `<span class="msn-status-tag">(${data.status})</span>` 
+      : '';
+
     bubble.innerHTML = `
       <div class="meta">
-        <span class="user-name">${data.user}</span>${djBadgeHTML}
+        <span class="user-name">${data.user}</span>${statusHTML}${djBadgeHTML}
         <span style="font-weight:normal;color:#888;font-size:11px;">(${data.time})</span>:
       </div>
       <div class="text" style="color: ${textColor} !important; font-weight: ${textWeight} !important; font-style: ${textStyle} !important; text-decoration: ${textDecor} !important;">
@@ -647,7 +728,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('chat-history-cleared', () => {
-    chatLogs.innerHTML = '<div style="text-align:center;color:#888;padding:10px;">--- เริ่มต้นวันใหม่ ---</div>';
+    chatLogs.innerHTML = '<div style="text-align:center;color:#888;padding:10px;">--- เริ่มต้นวันใหม่ / ล้างข้อความ ---</div>';
   });
 
   socket.on('user-typing', (data) => {
@@ -664,6 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function sendMessage() {
     const text = chatInput.value.trim();
     const user = usernameInput.value.trim() || 'Guest';
+    const status = userstatusInput ? userstatusInput.value.trim() : '';
     if (!text) return;
 
     clearTimeout(typingTimeout);
@@ -671,6 +753,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     socket.emit('chat-message', {
       user,
+      status,
       text,
       style: { ...currentStyle }
     });
@@ -738,10 +821,19 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // Main Audio Player
+  // ==========================================
+  // ⏱️ Main Audio & Track Timer
+  // ==========================================
   let isBroadcastingMic = false;
   let mediaRecorder = null;
   let playlist = [];
+  let trackTimerInterval = null;
+
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }
 
   if (btnListen) {
     btnListen.onclick = async () => {
@@ -771,6 +863,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentMusicSource) currentMusicSource.stop();
         currentMusicSource = source;
         source.connect(musicGainNode);
+
+        // จัดการนับเวลาเพลง
+        if (trackTimerInterval) clearInterval(trackTimerInterval);
+        const duration = audioBuffer.duration;
+        if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
+        let elapsed = 0;
+
+        trackTimerInterval = setInterval(() => {
+          elapsed += 1;
+          if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(elapsed);
+          if (trackProgressFill) {
+            const percent = Math.min(100, (elapsed / duration) * 100);
+            trackProgressFill.style.width = `${percent}%`;
+          }
+          if (elapsed >= duration) {
+            clearInterval(trackTimerInterval);
+          }
+        }, 1000);
       } else {
         source.connect(micGainNode);
       }
@@ -784,6 +894,12 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.on('track-update', (track) => {
     if (trackTitle) trackTitle.textContent = track.title;
     if (trackArtist) trackArtist.textContent = track.artist;
+    if (track.title === "รอเริ่มรายการ" || track.title === "จบรายการแล้ว" || track.title === "ดีเจออฟไลน์") {
+      if (trackTimerInterval) clearInterval(trackTimerInterval);
+      if (trackTimeCurrent) trackTimeCurrent.textContent = "00:00";
+      if (trackTimeTotal) trackTimeTotal.textContent = "00:00";
+      if (trackProgressFill) trackProgressFill.style.width = "0%";
+    }
   });
 
   socket.on('playlist-update', (list) => {
