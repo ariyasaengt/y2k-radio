@@ -537,3 +537,70 @@ body {
 .logout-btn:hover {
   background: linear-gradient(180deg, #fca5a5 0%, #f87171 100%) !important;
 }
+
+/* ========================================================
+   📱 Responsive Mobile View (รองรับหน้าจอมือถือและแท็บเล็ต)
+   ======================================================== */
+@media (max-width: 768px) {
+  body {
+    height: auto !important;
+    min-height: 100vh;
+    overflow-y: auto !important;
+    padding: 6px !important;
+    display: block !important;
+  }
+
+  .desktop-wrap {
+    flex-direction: column !important;
+    height: auto !important;
+    max-width: 100% !important;
+    gap: 10px;
+  }
+
+  /* ปรับแถบควบคุมวิทยุให้ยืดเต็มจอมือถือ */
+  .side-bar {
+    width: 100% !important;
+    max-height: none !important;
+  }
+
+  /* ปรับความสูงกล่องคิวเพลงในมือถือ */
+  .playlist-section {
+    max-height: 140px;
+  }
+
+  /* ปรับหน้าต่างแชทให้สูงพอดีมือและพิมพ์สะดวก */
+  .chat-window {
+    width: 100% !important;
+    height: 75vh !important;
+    min-height: 500px;
+  }
+
+  /* หัวข้อประจำวันให้ตัดคำขึ้นบรรทัดใหม่ได้ถ้าหน้าจอเล็ก */
+  .topic-banner {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 10px;
+  }
+
+  .topic-text {
+    font-size: 12px;
+    white-space: normal;
+  }
+
+  /* ปรับปุ่มเครื่องมือและช่องพิมพ์ให้กดง่ายด้วยนิ้ว */
+  .chat-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .input-row {
+    flex-wrap: wrap;
+  }
+
+  #username {
+    width: 100% !important;
+  }
+
+  #btn-send {
+    width: 70px;
+  }
+}
