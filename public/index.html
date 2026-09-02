@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Y2K Messenger Radio Live</title>
+  <title>Y2K Messenger Radio</title>
   <script src="https://www.youtube.com/iframe_api"></script>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <canvas id="glitter-canvas"></canvas>
   <div id="heart-container" class="heart-container"></div>
-  <div id="gift-fly-container" class="gift-fly-container"></div>
 
   <div id="main-app-window" class="desktop-wrap">
+    <!-- แถบซ้าย: สถานีวิทยุและดีเจ -->
     <aside class="window-pane side-bar">
       <div class="window-header">
         <span class="icon-flower">🌸</span>
@@ -31,12 +31,14 @@
       </div>
 
       <div class="side-content">
+        <!-- Now Playing -->
         <div class="section-box">
           <div class="section-title">Now Playing (Main)</div>
           <div class="now-playing-box">
             <div id="track-title" class="track-title">รอเริ่มรายการ</div>
             <div id="track-artist" class="track-sub">Offline</div>
 
+            <!-- หน้าจอ Mini Player สำหรับ YouTube -->
             <div id="yt-screen-wrapper" class="yt-screen-container hide">
               <div id="yt-player-element"></div>
             </div>
@@ -54,16 +56,18 @@
           </div>
         </div>
 
-        <div class="section-box gift-box">
+        <!-- กล่องส่งของขวัญให้ดีเจ -->
+        <div class="section-box">
           <div class="section-title">🎁 ส่งของขวัญ & ดอกไม้ให้ดีเจ</div>
-          <div class="gift-btn-grid">
-            <button class="gift-btn" data-gift="rose" title="ส่งกุหลาบแดง">🌹 กุหลาบ</button>
-            <button class="gift-btn" data-gift="vinyl" title="ส่งแผ่นเสียงทองคำ">📀 แผ่นทอง</button>
-            <button class="gift-btn" data-gift="boba" title="เลี้ยงชานมไข่มุก">🥤 ชานม</button>
-            <button class="gift-btn" data-gift="yadom" title="ส่งยาดมแก้เหนื่อย">🌿 ยาดม</button>
+          <div class="sfx-grid">
+            <button type="button" class="sfx-btn gift-btn" data-gift="🌹 กุหลาบ">🌹 กุหลาบ</button>
+            <button type="button" class="sfx-btn gift-btn" data-gift="📀 แผ่นทอง">📀 แผ่นทอง</button>
+            <button type="button" class="sfx-btn gift-btn" data-gift="🧋 ชานม">🧋 ชานม</button>
+            <button type="button" class="sfx-btn gift-btn" data-gift="🌿 ยาดม">🌿 ยาดม</button>
           </div>
         </div>
 
+        <!-- Thai Radio Tuner -->
         <div class="section-box tuner-box">
           <div class="section-title">Thai Radio Tuner (คลื่นวิทยุไทยสด)</div>
           <select id="backup-station-select" class="y2k-select">
@@ -84,6 +88,7 @@
           <audio id="backup-audio-player" controls preload="none" style="width: 100%; height: 28px; margin-top: 6px;"></audio>
         </div>
 
+        <!-- Playlist Queue -->
         <div class="section-box playlist-section">
           <div class="section-title">Playlist Queue</div>
           <ul id="playlist-container" class="playlist-list">
@@ -91,6 +96,7 @@
           </ul>
         </div>
 
+        <!-- แผงดีเจและแอดมิน -->
         <div class="section-box dj-panel">
           <div class="section-title">Broadcast Booth</div>
           
@@ -136,15 +142,7 @@
               </ul>
             </div>
 
-            <div class="recorder-box">
-              <span class="sub-label">🎙️ บันทึกเสียงรายการสด (Recorder):</span>
-              <div class="btn-group">
-                <button type="button" id="btn-record-show" class="y2k-btn flex-1">⏺️ เริ่มอัดรายการ</button>
-                <a id="btn-download-record" class="y2k-btn primary-btn hide" download="broadcast_show.webm">💾 ดาวน์โหลด</a>
-              </div>
-            </div>
-
-            <div class="upload-music-box" style="margin-top: 6px;">
+            <div class="upload-music-box">
               <label for="dj-file-input" class="y2k-btn primary-btn upload-music-btn">
                 📂 + เลือกไฟล์ MP3 ในเครื่องเข้าคิว
               </label>
@@ -220,11 +218,7 @@
                   </div>
                   <input type="range" id="slider-mic-vol" class="y2k-range" min="0" max="150" value="100">
                 </div>
-                
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
-                  <span style="font-size: 11px; font-weight: bold; color: #0369a1;">🎤 Auto-Ducking (หรี่อัตโนมัติเมื่อพูด):</span>
-                  <input type="checkbox" id="chk-auto-ducking" checked style="cursor: pointer;">
-                </div>
+                <button type="button" id="btn-ducking" class="y2k-btn ducking-btn">🔉 หรี่เพลงพูดไมค์ (Ducking)</button>
               </div>
             </div>
           </div>
@@ -232,20 +226,19 @@
       </div>
     </aside>
 
+    <!-- แถบขวา: ห้องแชท -->
     <main class="window-pane chat-window">
       <div class="window-header">
         <span class="icon-bubble">💬</span>
         <span class="title">Live Chat & Shoutbox (MSN Edition)</span>
-        <div style="margin-left: auto; display: flex; align-items: center; gap: 4px;">
-          <label style="font-size: 10px; color: #fff; cursor: pointer;">
-            <input type="checkbox" id="chk-msn-sound" checked> 🔊 เสียง MSN
-          </label>
-        </div>
+        <label style="margin-left: auto; font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+          <input type="checkbox" id="chk-msn-sound" checked> 🔊 เสียง MSN
+        </label>
       </div>
 
       <div class="marquee-ticker">
         <marquee scrollamount="4" behavior="scroll" direction="left">
-          ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิต 24 ชม. • ระบบ Auto-DJ & Live Broadcast • พิมพ์อิโมจิ (H) (K) (P) (F) (M) ได้เลย! ✨
+          ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • พิมพ์อิโมจิ (H) (K) (P) (F) (M) ได้เลย! ✨
         </marquee>
       </div>
 
@@ -269,37 +262,29 @@
           <button type="button" id="btn-italic" class="tool-btn"><i>I</i></button>
           <button type="button" id="btn-underline" class="tool-btn"><u>U</u></button>
           <div class="pop-wrapper">
-            <button type="button" id="btn-emoji" class="tool-btn" title="MSN Emoticons">😊</button>
+            <button type="button" id="btn-emoji" class="tool-btn">😊</button>
             <div id="emoji-menu" class="emoji-picker hide">
-              <span data-code="(H)" title="(H) แว่นดำ">🕶️</span>
-              <span data-code="(K)" title="(K) จุ๊บ">💋</span>
-              <span data-code="(P)" title="(P) กล้อง">📷</span>
-              <span data-code="(F)" title="(F) กุหลาบ">🌹</span>
-              <span data-code="(M)" title="(M) MSN">🦋</span>
-              <span data-code="(L)" title="(L) หัวใจ">❤️</span>
-              <span data-code="(6)" title="(6) ซาตานน้อย">😈</span>
-              <span data-code="(Y)" title="(Y) เยี่ยม">👍</span>
-              <span data-code=":-D" title=":-D ยิ้มกว้าง">😀</span>
-              <span data-code=":-P" title=":-P แลบลิ้น">😜</span>
+              <span>😀</span><span>😎</span><span>😜</span><span>😍</span><span>🥺</span>
+              <span>😭</span><span>🔥</span><span>✨</span><span>🎉</span><span>❤️</span>
             </div>
           </div>
           <label class="color-picker-label tool-btn" title="เปลี่ยนสีข้อความ">
             🎨
             <input type="color" id="chat-color" value="#000000">
           </label>
-          <button type="button" id="btn-heart-reaction" class="tool-btn heart-btn" title="ส่งหัวใจ">💖</button>
-          <button type="button" id="btn-nudge" class="tool-btn nudge-btn" title="สะกิด MSN สั่นหน้าจอ">💥 สะกิด</button>
+          <button type="button" id="btn-heart-reaction" class="tool-btn heart-btn" title="กดส่งหัวใจ">💖</button>
+          <button type="button" id="btn-nudge" class="tool-btn nudge-btn" title="ส่งสัญญาณสะกิด MSN สั่นหน้าจอ!">💥 สะกิด</button>
         </div>
 
         <div class="input-row" style="margin-bottom: 5px;">
-          <select id="msn-presence-select" class="y2k-select" style="width: 95px;" title="เลือกสถานะ MSN">
-            <option value="online">🟢 ออนไลน์</option>
-            <option value="busy">🔴 ไม่ว่าง</option>
-            <option value="away">🟡 ไม่อยู่</option>
-            <option value="brb">☕ ประเดี๋ยวมา</option>
-            <option value="offline">⚪ ออฟไลน์</option>
+          <!-- MSN Status Selector -->
+          <select id="user-online-status" class="y2k-select" style="width: 120px;">
+            <option value="🟢 ออนไลน์">🟢 ออนไลน์</option>
+            <option value="🔴 ห้ามรบกวน">🔴 ไม่ว่าง</option>
+            <option value="🟡 ไม่อยู่">🟡 ไม่อยู่</option>
+            <option value="☕ ไปพักดื่มกาแฟ">☕ ไปพัก</option>
           </select>
-          <input type="text" id="username" class="y2k-input" placeholder="ชื่อเล่น" style="width: 120px;">
+          <input type="text" id="username" class="y2k-input" placeholder="ชื่อเล่น" style="width: 130px;">
           <input type="text" id="userstatus" class="y2k-input flex-1" placeholder="สเตตัส MSN (จะขึ้น Now Listening อัตโนมัติเมื่อฟังเพลง)">
         </div>
 
@@ -385,6 +370,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=30"></script>
+  <script src="app.js?v=25"></script>
 </body>
 </html>
