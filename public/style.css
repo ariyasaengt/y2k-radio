@@ -695,19 +695,27 @@ body {
   #btn-send { width: 70px; }
 }
 
-/* บังคับให้ช่องกรอกและปุ่มในกล่อง moderation ยุบตัวพอดีกับความกว้าง */
-.moderation-box .input-row {
-  display: flex;
-  gap: 4px;
-  width: 100%;
+/* ป้องกัน input ทุกตัวใน sidebar ดันปุ่มจนล้นกรอบ */
+.side-bar .input-row {
+  display: flex !important;
+  gap: 4px !important;
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
-.moderation-box .input-row input {
-  min-width: 0 !important; /* ป้องกันช่องพิมพ์ดันปุ่มหลุดขอบ */
+.side-bar .input-row input {
+  min-width: 0 !important; /* ปลดล็อก min-width ทำให้หดตัวตามความกว้างจริงได้ */
+  width: 100% !important;
 }
 
-.moderation-box .input-row .y2k-btn {
+.side-bar .input-row .y2k-btn {
+  flex-shrink: 0 !important; /* ห้ามปุ่มบีบจนเสียรูป */
   padding: 4px 6px !important;
-  white-space: nowrap;
-  flex-shrink: 0; /* ป้องกันปุ่มเบี้ยว */
+  font-size: 11px !important;
+  white-space: nowrap !important;
+}
+
+/* ปรับปุ่มเพิ่มเข้าคิว YouTube สีแดง ให้กระชับพอดี */
+.yt-play-btn {
+  padding: 4px 8px !important;
 }
