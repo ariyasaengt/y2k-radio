@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   const socket = io();
 
+  let myRole = 'listener'; // 'admin' | 'dj' | 'dj_pending' | 'listener'
+
   const mainAppWindow = document.getElementById('main-app-window');
   const stationStatus = document.getElementById('station-status');
   const onlineUsersBadge = document.getElementById('online-users-badge');
@@ -21,16 +23,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const pinnedText = document.getElementById('pinned-text');
   const typingIndicator = document.getElementById('typing-indicator');
 
-  // Backup Radio Tuner
   const backupStationSelect = document.getElementById('backup-station-select');
   const backupAudioPlayer = document.getElementById('backup-audio-player');
   let currentHls = null;
 
-  // DJ Elements
+  // ควบคุมสิทธิ์
   const btnDjLogin = document.getElementById('btn-dj-login');
   const btnDjLogout = document.getElementById('btn-dj-logout');
   const djLoginSection = document.getElementById('dj-login-section');
+  const djPendingSection = document.getElementById('dj-pending-section');
   const djControlsSection = document.getElementById('dj-controls-section');
+  const roleBadge = document.getElementById('role-badge');
+  const adminApprovalPanel = document.getElementById('admin-approval-panel');
+  const djApprovalList = document.getElementById('dj-approval-list');
+  const djQueueCount = document.getElementById('dj-queue-count');
+
   const btnShowToggle = document.getElementById('btn-show-toggle');
   const djBroadcastTools = document.getElementById('dj-broadcast-tools');
   const djFileInput = document.getElementById('dj-file-input');
@@ -43,17 +50,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnUnpinMsg = document.getElementById('btn-unpin-msg');
   const btnClearChat = document.getElementById('btn-clear-chat');
 
-  // YouTube Control
   const djYtUrl = document.getElementById('dj-yt-url');
   const btnPlayYt = document.getElementById('btn-play-yt');
 
-  // Nudge, Reactions, SFX
   const btnNudge = document.getElementById('btn-nudge');
   const btnHeartReaction = document.getElementById('btn-heart-reaction');
   const heartContainer = document.getElementById('heart-container');
   const sfxButtons = document.querySelectorAll('.sfx-btn');
 
-  // Request Modal Elements
   const btnOpenRequestModal = document.getElementById('btn-open-request-modal');
   const requestModal = document.getElementById('request-modal');
   const reqSongInput = document.getElementById('req-song-input');
@@ -63,21 +67,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const requestsList = document.getElementById('requests-list');
   const reqCountBadge = document.getElementById('req-count');
 
-  // Mixer Sliders
   const sliderMusicVol = document.getElementById('slider-music-vol');
   const sliderMicVol = document.getElementById('slider-mic-vol');
   const labelMusicVol = document.getElementById('label-music-vol');
   const labelMicVol = document.getElementById('label-mic-vol');
   const btnDucking = document.getElementById('btn-ducking');
 
-  // Modal
   const djModal = document.getElementById('dj-modal');
   const modalPassInput = document.getElementById('modal-pass-input');
   const modalBtnConfirm = document.getElementById('modal-btn-confirm');
   const modalBtnCancel = document.getElementById('modal-btn-cancel');
   const modalError = document.getElementById('modal-error');
 
-  // Toolbar
   const btnBold = document.getElementById('btn-bold');
   const btnItalic = document.getElementById('btn-italic');
   const btnUnderline = document.getElementById('btn-underline');
@@ -91,60 +92,156 @@ document.addEventListener('DOMContentLoaded', () => {
   let previousMusicVol = 80;
 
   // ==========================================
-  // 🎥 YouTube IFrame Background Player
+  // 🔐 ระบบยืนยันสิทธิ์ Admin / DJ / อนุมัติคิว
+  // ==========================================
+  if (usernameInput) {
+    if (localStorage.getItem('saved_username')) usernameInput.value = localStorage.getItem('saved_username');
+    usernameInput.addEventListener('input', () => localStorage.setItem('saved_username', usernameInput.value.trim()));
+  }
+
+  const savedKey = localStorage.getItem('user_auth_key');
+  if (savedKey) verifyAuth(savedKey);
+
+  btnDjLogin.onclick = () => {
+    modalPassInput.value = '';
+    if (modalError) modalError.classList.add('hide');
+    djModal.classList.remove('hide');
+    modalPassInput.focus();
+  };
+
+  modalBtnCancel.onclick = () => djModal.classList.add('hide');
+  modalBtnConfirm.onclick = () => verifyAuth(modalPassInput.value.trim());
+  modalPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyAuth(modalPassInput.value.trim()); });
+
+  function verifyAuth(pass) {
+    if (!pass) return;
+    const user = usernameInput.value.trim() || 'Guest';
+    socket.emit('auth-request', { key: pass, username: user }, (res) => {
+      if (res.success) {
+        localStorage.setItem('user_auth_key', pass);
+        djModal.classList.add('hide');
+        myRole = res.role;
+
+        if (res.role === 'admin') {
+          djLoginSection.classList.add('hide');
+          djPendingSection.classList.add('hide');
+          djControlsSection.classList.remove('hide');
+          roleBadge.textContent = "👑 Super Admin";
+          roleBadge.style.background = "#fee2e2";
+          roleBadge.style.color = "#991b1b";
+          roleBadge.style.borderColor = "#ef4444";
+          adminApprovalPanel.classList.remove('hide');
+        } else if (res.role === 'dj_pending') {
+          djLoginSection.classList.add('hide');
+          djPendingSection.classList.remove('hide');
+        }
+      } else {
+        if (modalError) {
+          modalError.textContent = res.message;
+          modalError.classList.remove('hide');
+        }
+      }
+    });
+  }
+
+  // แอดมินรับข้อมูลคิวดีเจที่รออนุมัติ
+  socket.on('admin-dj-queue-update', (queue) => {
+    if (myRole !== 'admin' || !djApprovalList) return;
+    djQueueCount.textContent = queue.length;
+    djApprovalList.innerHTML = '';
+    if (queue.length === 0) {
+      djApprovalList.innerHTML = '<li>ไม่มีดีเจรออนุมัติ</li>';
+      return;
+    }
+    queue.forEach(q => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div><strong>${q.username}</strong> (${q.time})</div>
+        <div>
+          <button class="accept-req-btn approve-dj-btn" data-id="${q.socketId}">อนุมัติ</button>
+          <button class="accept-req-btn reject-btn reject-dj-btn" data-id="${q.socketId}">ปฏิเสธ</button>
+        </div>
+      `;
+      djApprovalList.appendChild(li);
+    });
+
+    djApprovalList.querySelectorAll('.approve-dj-btn').forEach(b => {
+      b.onclick = () => socket.emit('admin-approve-dj', b.getAttribute('data-id'));
+    });
+    djApprovalList.querySelectorAll('.reject-dj-btn').forEach(b => {
+      b.onclick = () => socket.emit('admin-reject-dj', b.getAttribute('data-id'));
+    });
+  });
+
+  // ดีเจได้รับการอนุมัติจากแอดมิน
+  socket.on('dj-approved', () => {
+    myRole = 'dj';
+    djPendingSection.classList.add('hide');
+    djControlsSection.classList.remove('hide');
+    roleBadge.textContent = "🎧 On-Air DJ";
+    roleBadge.style.background = "#fef08a";
+    roleBadge.style.color = "#713f12";
+    roleBadge.style.borderColor = "#ca8a04";
+    adminApprovalPanel.classList.add('hide');
+    alert("🎉 แอดมินอนุมัติให้คุณจัดรายการแล้ว!");
+  });
+
+  socket.on('dj-rejected', () => {
+    myRole = 'listener';
+    localStorage.removeItem('user_auth_key');
+    djPendingSection.classList.add('hide');
+    djLoginSection.classList.remove('hide');
+    alert("❌ แอดมินปฏิเสธคำขอขึ้นจัดรายการ");
+  });
+
+  btnDjLogout.addEventListener('click', () => {
+    if (confirm("ต้องการออกจากระบบใช่หรือไม่?")) {
+      if (isShowLive) socket.emit('dj-end-show');
+      localStorage.removeItem('user_auth_key');
+      window.location.reload();
+    }
+  });
+
+  // ==========================================
+  // 🎥 YouTube Background Player
   // ==========================================
   let ytPlayer = null;
   let isYtReady = false;
 
   window.onYouTubeIframeAPIReady = function() {
     ytPlayer = new YT.Player('yt-player-hidden', {
-      height: '1',
-      width: '1',
-      playerVars: {
-        'autoplay': 1,
-        'controls': 0,
-        'disablekb': 1,
-        'fs': 0
-      },
+      height: '1', width: '1',
+      playerVars: { 'autoplay': 1, 'controls': 0, 'disablekb': 1, 'fs': 0 },
       events: {
         'onReady': () => { isYtReady = true; },
-        'onStateChange': onPlayerStateChange
+        'onStateChange': (e) => {
+          if (e.data === YT.PlayerState.PLAYING) {
+            if (trackTimerInterval) clearInterval(trackTimerInterval);
+            const duration = ytPlayer.getDuration();
+            if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
+            trackTimerInterval = setInterval(() => {
+              if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+              const current = ytPlayer.getCurrentTime();
+              if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(current);
+              if (trackProgressFill) trackProgressFill.style.width = `${Math.min(100, (current / duration) * 100)}%`;
+            }, 1000);
+          }
+        }
       }
     });
   };
 
   function extractYouTubeID(url) {
-    const regExp = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/;
-    const match = url.match(regExp);
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
     return match ? match[1] : null;
   }
 
-  function onPlayerStateChange(event) {
-    if (event.data === YT.PlayerState.PLAYING) {
-      if (trackTimerInterval) clearInterval(trackTimerInterval);
-      const duration = ytPlayer.getDuration();
-      if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
-
-      trackTimerInterval = setInterval(() => {
-        if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
-        const current = ytPlayer.getCurrentTime();
-        if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(current);
-        if (trackProgressFill) {
-          const percent = Math.min(100, (current / duration) * 100);
-          trackProgressFill.style.width = `${percent}%`;
-        }
-      }, 1000);
-    }
-  }
-
-  // กดปุ่มเพิ่ม YouTube เข้าคิว Playlist
   if (btnPlayYt) {
     btnPlayYt.addEventListener('click', async () => {
       const url = djYtUrl.value.trim();
       if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
-      
       const videoId = extractYouTubeID(url);
-      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง! ตัวอย่าง: https://youtu.be/xxxx หรือ https://www.youtube.com/watch?v=xxxx");
+      if (!videoId) return alert("ลิงก์ไม่ถูกต้อง!");
 
       let title = `YouTube Track (${videoId})`;
       try {
@@ -155,18 +252,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       playlist.push({ name: `▶ [YT] ${title}`, type: 'youtube', videoId: videoId });
       socket.emit('dj-add-youtube-to-playlist', { videoId, title: `▶ [YT] ${title}` });
-      
       djYtUrl.value = '';
-      alert(`เพิ่มเพลง "${title}" เข้าคิวเรียบร้อยแล้ว!`);
+      alert(`เพิ่ม "${title}" เข้าคิวเรียบร้อย!`);
     });
   }
 
   socket.on('play-youtube-track', (data) => {
     initAudioContext();
-    if (currentMusicSource) {
-      currentMusicSource.stop();
-      currentMusicSource = null;
-    }
+    if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
     if (isYtReady && ytPlayer) {
       ytPlayer.loadVideoById(data.videoId);
       ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
@@ -175,9 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('dj-stop-youtube', () => {
-    if (isYtReady && ytPlayer && typeof ytPlayer.stopVideo === 'function') {
-      ytPlayer.stopVideo();
-    }
+    if (isYtReady && ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
   });
 
   // ==========================================
@@ -188,43 +279,33 @@ document.addEventListener('DOMContentLoaded', () => {
       const streamUrl = e.target.value;
       if (!streamUrl) {
         if (currentHls) { currentHls.destroy(); currentHls = null; }
-        backupAudioPlayer.pause();
-        backupAudioPlayer.src = '';
+        backupAudioPlayer.pause(); backupAudioPlayer.src = '';
         return;
       }
-
       if (streamUrl.includes('.m3u8')) {
         if (Hls.isSupported()) {
           if (currentHls) currentHls.destroy();
           currentHls = new Hls();
           currentHls.loadSource(streamUrl);
           currentHls.attachMedia(backupAudioPlayer);
-          currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
-            backupAudioPlayer.play().catch(console.warn);
-          });
+          currentHls.on(Hls.Events.MANIFEST_PARSED, () => backupAudioPlayer.play().catch(console.warn));
         } else if (backupAudioPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-          backupAudioPlayer.src = streamUrl;
-          backupAudioPlayer.play().catch(console.warn);
+          backupAudioPlayer.src = streamUrl; backupAudioPlayer.play().catch(console.warn);
         }
       } else {
         if (currentHls) { currentHls.destroy(); currentHls = null; }
-        backupAudioPlayer.src = streamUrl;
-        backupAudioPlayer.play().catch(console.warn);
+        backupAudioPlayer.src = streamUrl; backupAudioPlayer.play().catch(console.warn);
       }
     });
   }
 
   // ==========================================
-  // ✨ Y2K Glitter Star Cursor
+  // ✨ Glitter Star Cursor
   // ==========================================
   const glitterCanvas = document.getElementById('glitter-canvas');
   const gCtx = glitterCanvas.getContext('2d');
   let particles = [];
-
-  function resizeCanvas() {
-    glitterCanvas.width = window.innerWidth;
-    glitterCanvas.height = window.innerHeight;
-  }
+  function resizeCanvas() { glitterCanvas.width = window.innerWidth; glitterCanvas.height = window.innerHeight; }
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
 
@@ -235,9 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
         y: e.clientY + (Math.random() - 0.5) * 12,
         size: Math.random() * 4 + 2,
         color: `hsl(${Math.random() * 60 + 180}, 100%, 75%)`,
-        alpha: 1,
-        vy: Math.random() * 1.5 + 0.5,
-        vx: (Math.random() - 0.5) * 1
+        alpha: 1, vy: Math.random() * 1.5 + 0.5, vx: (Math.random() - 0.5) * 1
       });
     }
   });
@@ -246,34 +325,19 @@ document.addEventListener('DOMContentLoaded', () => {
     gCtx.clearRect(0, 0, glitterCanvas.width, glitterCanvas.height);
     for (let i = 0; i < particles.length; i++) {
       const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.alpha -= 0.025;
-
-      gCtx.fillStyle = p.color;
-      gCtx.globalAlpha = Math.max(0, p.alpha);
-      gCtx.beginPath();
-      gCtx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
-      gCtx.fill();
-
-      if (p.alpha <= 0) {
-        particles.splice(i, 1);
-        i--;
-      }
+      p.x += p.vx; p.y += p.vy; p.alpha -= 0.025;
+      gCtx.fillStyle = p.color; gCtx.globalAlpha = Math.max(0, p.alpha);
+      gCtx.beginPath(); gCtx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2); gCtx.fill();
+      if (p.alpha <= 0) { particles.splice(i, 1); i--; }
     }
     requestAnimationFrame(animateGlitter);
   }
   animateGlitter();
 
   // ==========================================
-  // 💖 Floating Heart Reactions
+  // 💖 Reactions & Nudge
   // ==========================================
-  if (btnHeartReaction) {
-    btnHeartReaction.addEventListener('click', () => {
-      socket.emit('send-reaction', '❤️');
-    });
-  }
-
+  btnHeartReaction.onclick = () => socket.emit('send-reaction', '❤️');
   socket.on('receive-reaction', (type) => {
     if (!heartContainer) return;
     const heart = document.createElement('div');
@@ -284,20 +348,36 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => heart.remove(), 2300);
   });
 
+  let canNudge = true;
+  btnNudge.onclick = () => {
+    if (!canNudge) return alert("กรุณารอ 5 วินาที!");
+    socket.emit('send-nudge', usernameInput.value.trim() || 'Guest');
+    canNudge = false;
+    setTimeout(() => canNudge = true, 5000);
+  };
+
+  socket.on('receive-nudge', (data) => {
+    if (mainAppWindow) {
+      mainAppWindow.classList.remove('nudge-shake');
+      void mainAppWindow.offsetWidth;
+      mainAppWindow.classList.add('nudge-shake');
+    }
+    const b = document.createElement('div');
+    b.className = 'chat-bubble';
+    b.innerHTML = `<div style="color: #b91c1c; font-weight: bold; font-size: 11px;">💥 ${data.user} ได้ส่งสัญญาณสะกิดหน้าจอคุณ!</div>`;
+    chatLogs.appendChild(b);
+    chatLogs.scrollTop = chatLogs.scrollHeight;
+  });
+
   // ==========================================
   // 🔊 Web Audio & Winamp Visualizer
   // ==========================================
-  let listenAudioCtx = null;
-  let musicGainNode = null;
-  let micGainNode = null;
-  let analyserNode = null;
-  let currentMusicSource = null;
+  let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
 
   function initAudioContext() {
     if (!listenAudioCtx) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       listenAudioCtx = new AudioContext();
-
       analyserNode = listenAudioCtx.createAnalyser();
       analyserNode.fftSize = 64;
 
@@ -325,20 +405,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function render() {
       requestAnimationFrame(render);
       analyserNode.getByteFrequencyData(dataArray);
-
       vCtx.fillStyle = '#060e1d';
       vCtx.fillRect(0, 0, vCanvas.width, vCanvas.height);
-
       const barWidth = (vCanvas.width / bufferLength) * 1.5;
       let x = 0;
-
       for (let i = 0; i < bufferLength; i++) {
         const barHeight = (dataArray[i] / 255) * vCanvas.height;
         const grad = vCtx.createLinearGradient(0, vCanvas.height, 0, 0);
-        grad.addColorStop(0, '#22c55e');
-        grad.addColorStop(0.7, '#eab308');
-        grad.addColorStop(1, '#ef4444');
-
+        grad.addColorStop(0, '#22c55e'); grad.addColorStop(0.7, '#eab308'); grad.addColorStop(1, '#ef4444');
         vCtx.fillStyle = grad;
         vCtx.fillRect(x, vCanvas.height - barHeight, barWidth - 1, barHeight);
         x += barWidth;
@@ -347,732 +421,292 @@ document.addEventListener('DOMContentLoaded', () => {
     render();
   }
 
-  // ==========================================
-  // 💥 MSN Nudge & Sound FX
-  // ==========================================
-  function playNudgeSound() {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(150, ctx.currentTime);
-      osc.frequency.linearRampToValueAtTime(80, ctx.currentTime + 0.35);
-
-      gain.gain.setValueAtTime(0.25, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.38);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.4);
-    } catch(e){}
-  }
-
-  let canNudge = true;
-  if (btnNudge) {
-    btnNudge.addEventListener('click', () => {
-      if (!canNudge) return alert("กรุณารอ 5 วินาทีก่อนส่งสะกิดใหม่อีกครั้ง!");
-      const user = usernameInput.value.trim() || 'Guest';
-      socket.emit('send-nudge', user);
-      canNudge = false;
-      setTimeout(() => canNudge = true, 5000);
-    });
-  }
-
-  socket.on('receive-nudge', (data) => {
-    if (mainAppWindow) {
-      mainAppWindow.classList.remove('nudge-shake');
-      void mainAppWindow.offsetWidth;
-      mainAppWindow.classList.add('nudge-shake');
-    }
-    playNudgeSound();
-
-    const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble';
-    bubble.innerHTML = `<div style="color: #b91c1c; font-weight: bold; font-size: 11px;">💥 ${data.user} ได้ส่งสัญญาณสะกิดหน้าจอคุณ!</div>`;
-    chatLogs.appendChild(bubble);
-    chatLogs.scrollTop = chatLogs.scrollHeight;
-  });
-
-  sfxButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const soundType = btn.getAttribute('data-sound');
-      socket.emit('dj-play-sfx', soundType);
-    });
-  });
-
+  // SFX
+  sfxButtons.forEach(btn => btn.onclick = () => socket.emit('dj-play-sfx', btn.getAttribute('data-sound')));
   socket.on('play-sfx', (type) => {
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
       if (type === 'airhorn') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(466.16, ctx.currentTime);
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.65);
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(466.16, ctx.currentTime);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.65);
       } else if (type === 'rimshot') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(250, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.4, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.25);
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(250, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.4, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+        osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.25);
       } else if (type === 'sad') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(320, ctx.currentTime);
-        osc.frequency.linearRampToValueAtTime(140, ctx.currentTime + 0.6);
-        gain.gain.setValueAtTime(0.25, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.65);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.7);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(320, ctx.currentTime); osc.frequency.linearRampToValueAtTime(140, ctx.currentTime + 0.6);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.65);
+        osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.7);
       } else if (type === 'laugh') {
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(500, ctx.currentTime);
-        osc.frequency.setValueAtTime(700, ctx.currentTime + 0.1);
-        osc.frequency.setValueAtTime(450, ctx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.45);
+        osc.type = 'square'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.setValueAtTime(700, ctx.currentTime + 0.1); osc.frequency.setValueAtTime(450, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.45);
       }
     } catch(e){}
   });
 
-  // ==========================================
-  // 📝 กล่องขอเพลง
-  // ==========================================
-  if (btnOpenRequestModal) {
-    btnOpenRequestModal.addEventListener('click', () => {
-      reqSongInput.value = '';
-      reqNoteInput.value = '';
-      requestModal.classList.remove('hide');
-      reqSongInput.focus();
-    });
-  }
-
-  if (reqBtnCancel) {
-    reqBtnCancel.addEventListener('click', () => requestModal.classList.add('hide'));
-  }
-
-  if (reqBtnSubmit) {
-    reqBtnSubmit.addEventListener('click', () => {
-      const song = reqSongInput.value.trim();
-      const note = reqNoteInput.value.trim();
-      const user = usernameInput.value.trim() || 'ผู้ฟังทางบ้าน';
-      if (!song) return alert("กรุณาใส่ชื่อเพลงด้วยครับ");
-
-      socket.emit('submit-song-request', { user, song, note });
-      requestModal.classList.add('hide');
-      alert("ส่งคำขอเพลงถึงดีเจเรียบร้อยแล้ว! 📻");
-    });
-  }
+  // Song Requests
+  btnOpenRequestModal.onclick = () => { reqSongInput.value = ''; reqNoteInput.value = ''; requestModal.classList.remove('hide'); reqSongInput.focus(); };
+  reqBtnCancel.onclick = () => requestModal.classList.add('hide');
+  reqBtnSubmit.onclick = () => {
+    const song = reqSongInput.value.trim(), note = reqNoteInput.value.trim(), user = usernameInput.value.trim() || 'ผู้ฟังทางบ้าน';
+    if (!song) return alert("กรุณาใส่ชื่อเพลง!");
+    socket.emit('submit-song-request', { user, song, note });
+    requestModal.classList.add('hide');
+    alert("ส่งคำขอเพลงแล้ว! 📻");
+  };
 
   socket.on('requests-update', (reqs) => {
-    if (reqCountBadge) reqCountBadge.textContent = reqs.length;
-    if (!requestsList) return;
+    reqCountBadge.textContent = reqs.length;
     requestsList.innerHTML = '';
-    if (reqs.length === 0) {
-      requestsList.innerHTML = '<li>ยังไม่มีคำขอเพลง</li>';
-      return;
-    }
+    if (reqs.length === 0) { requestsList.innerHTML = '<li>ยังไม่มีคำขอเพลง</li>'; return; }
     reqs.forEach(r => {
       const li = document.createElement('li');
-      li.innerHTML = `
-        <div style="overflow:hidden;text-overflow:ellipsis;">
-          <strong>${r.song}</strong> (${r.user})<br>
-          <span style="color:#666;font-size:10px;">${r.note || '-'}</span>
-        </div>
-        <button class="accept-req-btn" data-id="${r.id}">✅ รับ</button>
-      `;
+      li.innerHTML = `<div><strong>${r.song}</strong> (${r.user})<br><span style="color:#666;font-size:10px;">${r.note || '-'}</span></div><button class="accept-req-btn" data-id="${r.id}">✅ รับ</button>`;
       requestsList.appendChild(li);
     });
-
-    requestsList.querySelectorAll('.accept-req-btn').forEach(b => {
-      b.onclick = () => {
-        const id = parseInt(b.getAttribute('data-id'));
-        socket.emit('dj-accept-request', id);
-      };
-    });
+    requestsList.querySelectorAll('.accept-req-btn').forEach(b => b.onclick = () => socket.emit('dj-accept-request', parseInt(b.getAttribute('data-id'))));
   });
 
-  // ==========================================
-  // 📌 ปักหมุดและล้างแชทโดยดีเจ
-  // ==========================================
-  if (btnPinMsg) {
-    btnPinMsg.addEventListener('click', () => {
-      const txt = djPinInput.value.trim();
-      if (!txt) return;
-      socket.emit('dj-pin-message', txt);
-      djPinInput.value = '';
-    });
-  }
-
-  if (btnUnpinMsg) {
-    btnUnpinMsg.addEventListener('click', () => {
-      socket.emit('dj-pin-message', '');
-    });
-  }
-
-  if (btnClearChat) {
-    btnClearChat.addEventListener('click', () => {
-      if (confirm("ต้องการล้างประวัติแชททั้งหมดใช่หรือไม่?")) {
-        socket.emit('dj-clear-chat');
-      }
-    });
-  }
-
+  // Pin & Clear Chat
+  btnPinMsg.onclick = () => { const t = djPinInput.value.trim(); if (t) { socket.emit('dj-pin-message', t); djPinInput.value = ''; } };
+  btnUnpinMsg.onclick = () => socket.emit('dj-pin-message', '');
+  btnClearChat.onclick = () => { if (confirm("ต้องการล้างประวัติแชททั้งหมดใช่หรือไม่?")) socket.emit('dj-clear-chat'); };
   socket.on('pinned-update', (msg) => {
-    if (!pinnedBanner || !pinnedText) return;
-    if (msg) {
-      pinnedText.textContent = msg;
-      pinnedBanner.classList.remove('hide');
-    } else {
-      pinnedBanner.classList.add('hide');
-    }
+    if (msg) { pinnedText.textContent = msg; pinnedBanner.classList.remove('hide'); }
+    else pinnedBanner.classList.add('hide');
   });
 
   function playNotificationSound() {
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(800, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(1050, ctx.currentTime + 0.08);
-
-      gain.gain.setValueAtTime(0.12, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.16);
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1050, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.16);
     } catch (e) {}
   }
 
-  socket.on('online-users-count', (count) => {
-    if (onlineUsersBadge) onlineUsersBadge.textContent = `👥 ${count} คน`;
-  });
-
+  socket.on('online-users-count', (c) => onlineUsersBadge.textContent = `👥 ${c} คน`);
   socket.on('volume-update', (vols) => {
     if (listenAudioCtx) {
-      if (musicGainNode && vols.music !== undefined) {
-        musicGainNode.gain.setValueAtTime(vols.music, listenAudioCtx.currentTime);
-      }
-      if (micGainNode && vols.mic !== undefined) {
-        micGainNode.gain.setValueAtTime(vols.mic, listenAudioCtx.currentTime);
-      }
+      if (musicGainNode && vols.music !== undefined) musicGainNode.gain.setValueAtTime(vols.music, listenAudioCtx.currentTime);
+      if (micGainNode && vols.mic !== undefined) micGainNode.gain.setValueAtTime(vols.mic, listenAudioCtx.currentTime);
     }
-    if (isYtReady && ytPlayer && vols.music !== undefined) {
-      ytPlayer.setVolume(Math.round(vols.music * 100));
-    }
+    if (isYtReady && ytPlayer && vols.music !== undefined) ytPlayer.setVolume(Math.round(vols.music * 100));
   });
 
-  if (sliderMusicVol) {
-    sliderMusicVol.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value);
-      if (labelMusicVol) labelMusicVol.textContent = `${val}%`;
-      const floatVal = val / 100;
-      socket.emit('dj-volume-change', { type: 'music', volume: floatVal });
-      if (listenAudioCtx && musicGainNode) {
-        musicGainNode.gain.setValueAtTime(floatVal, listenAudioCtx.currentTime);
-      }
-      if (isYtReady && ytPlayer) {
-        ytPlayer.setVolume(val);
-      }
-    });
-  }
-
-  if (sliderMicVol) {
-    sliderMicVol.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value);
-      if (labelMicVol) labelMicVol.textContent = `${val}%`;
-      const floatVal = val / 100;
-      socket.emit('dj-volume-change', { type: 'mic', volume: floatVal });
-      if (listenAudioCtx && micGainNode) {
-        micGainNode.gain.setValueAtTime(floatVal, listenAudioCtx.currentTime);
-      }
-    });
-  }
-
-  if (btnDucking) {
-    btnDucking.addEventListener('click', () => {
-      if (!isDucking) {
-        previousMusicVol = parseInt(sliderMusicVol.value);
-        sliderMusicVol.value = 20;
-        if (labelMusicVol) labelMusicVol.textContent = "20%";
-        socket.emit('dj-volume-change', { type: 'music', volume: 0.2 });
-        if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(0.2, listenAudioCtx.currentTime);
-        if (isYtReady && ytPlayer) ytPlayer.setVolume(20);
-        btnDucking.classList.add('active');
-        btnDucking.textContent = "🔊 คืนระดับเสียงเพลงเดิม";
-        isDucking = true;
-      } else {
-        sliderMusicVol.value = previousMusicVol;
-        if (labelMusicVol) labelMusicVol.textContent = `${previousMusicVol}%`;
-        const floatVal = previousMusicVol / 100;
-        socket.emit('dj-volume-change', { type: 'music', volume: floatVal });
-        if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(floatVal, listenAudioCtx.currentTime);
-        if (isYtReady && ytPlayer) ytPlayer.setVolume(previousMusicVol);
-        btnDucking.classList.remove('active');
-        btnDucking.textContent = "🔉 หรี่เพลงพูดไมค์ (Ducking)";
-        isDucking = false;
-      }
-    });
-  }
-
-  socket.on('topic-update', (topic) => {
-    if (displayTopic) displayTopic.textContent = topic;
+  sliderMusicVol.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value);
+    labelMusicVol.textContent = `${val}%`;
+    socket.emit('dj-volume-change', { type: 'music', volume: val / 100 });
+    if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(val / 100, listenAudioCtx.currentTime);
+    if (isYtReady && ytPlayer) ytPlayer.setVolume(val);
   });
 
-  if (btnSaveTopic) {
-    btnSaveTopic.addEventListener('click', () => {
-      const newTopic = djTopicInput.value.trim();
-      if (!newTopic) return;
-      socket.emit('dj-set-topic', newTopic);
-      djTopicInput.value = '';
-    });
-  }
+  sliderMicVol.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value);
+    labelMicVol.textContent = `${val}%`;
+    socket.emit('dj-volume-change', { type: 'mic', volume: val / 100 });
+    if (listenAudioCtx && micGainNode) micGainNode.gain.setValueAtTime(val / 100, listenAudioCtx.currentTime);
+  });
+
+  btnDucking.onclick = () => {
+    if (!isDucking) {
+      previousMusicVol = parseInt(sliderMusicVol.value);
+      sliderMusicVol.value = 20; labelMusicVol.textContent = "20%";
+      socket.emit('dj-volume-change', { type: 'music', volume: 0.2 });
+      if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(0.2, listenAudioCtx.currentTime);
+      if (isYtReady && ytPlayer) ytPlayer.setVolume(20);
+      btnDucking.classList.add('active'); btnDucking.textContent = "🔊 คืนระดับเสียงเดิม"; isDucking = true;
+    } else {
+      sliderMusicVol.value = previousMusicVol; labelMusicVol.textContent = `${previousMusicVol}%`;
+      socket.emit('dj-volume-change', { type: 'music', volume: previousMusicVol / 100 });
+      if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(previousMusicVol / 100, listenAudioCtx.currentTime);
+      if (isYtReady && ytPlayer) ytPlayer.setVolume(previousMusicVol);
+      btnDucking.classList.remove('active'); btnDucking.textContent = "🔉 หรี่เพลงพูดไมค์ (Ducking)"; isDucking = false;
+    }
+  };
+
+  socket.on('topic-update', (t) => displayTopic.textContent = t);
+  btnSaveTopic.onclick = () => { const t = djTopicInput.value.trim(); if (t) { socket.emit('dj-set-topic', t); djTopicInput.value = ''; } };
 
   socket.on('dj-status-update', (isLive) => {
     isShowLive = isLive;
-    if (isLive) {
-      stationStatus.textContent = "● On Air (Live)";
-      stationStatus.className = "status-online";
+    stationStatus.textContent = isLive ? "● On Air (Live)" : "○ Offline";
+    stationStatus.className = isLive ? "status-online" : "status-offline";
+    if (isShowLive) {
+      btnShowToggle.textContent = "⏹️ จบรายการ (End Show)"; btnShowToggle.className = "y2k-btn off-air-btn";
+      djBroadcastTools.classList.remove('hide');
     } else {
-      stationStatus.textContent = "○ Offline";
-      stationStatus.className = "status-offline";
+      btnShowToggle.textContent = "🔴 เริ่มจัดรายการ (Go Live)"; btnShowToggle.className = "y2k-btn on-air-btn";
+      djBroadcastTools.classList.add('hide');
     }
-    updateShowButtonUI();
   });
 
-  function updateShowButtonUI() {
-    if (!btnShowToggle) return;
-    if (isShowLive) {
-      btnShowToggle.textContent = "⏹️ จบรายการ (End Show)";
-      btnShowToggle.className = "y2k-btn off-air-btn";
-      if (djBroadcastTools) djBroadcastTools.classList.remove('hide');
-    } else {
-      btnShowToggle.textContent = "🔴 เริ่มจัดรายการ (Go Live)";
-      btnShowToggle.className = "y2k-btn on-air-btn";
-      if (djBroadcastTools) djBroadcastTools.classList.add('hide');
-    }
-  }
+  btnShowToggle.onclick = () => {
+    if (!isShowLive) socket.emit('dj-start-show');
+    else if (confirm("ต้องการจบรายการใช่หรือไม่?")) socket.emit('dj-end-show');
+  };
 
-  if (btnShowToggle) {
-    btnShowToggle.addEventListener('click', () => {
-      if (!isShowLive) {
-        socket.emit('dj-start-show');
-      } else {
-        if (confirm("ต้องการจบรายการใช่หรือไม่?")) {
-          socket.emit('dj-end-show');
-        }
-      }
-    });
-  }
-
-  if (usernameInput) {
-    if (localStorage.getItem('saved_username')) {
-      usernameInput.value = localStorage.getItem('saved_username');
-    }
-    usernameInput.addEventListener('input', () => {
-      localStorage.setItem('saved_username', usernameInput.value.trim());
-    });
-  }
-
-  const savedDJKey = localStorage.getItem('dj_access_key');
-  if (savedDJKey) {
-    socket.emit('dj-auth', savedDJKey, (res) => {
-      if (res.success) {
-        unlockDJControls();
-        isShowLive = res.isLive;
-        updateShowButtonUI();
-      } else {
-        localStorage.removeItem('dj_access_key');
-      }
-    });
-  }
-
-  function unlockDJControls() {
-    if (djLoginSection) djLoginSection.classList.add('hide');
-    if (djControlsSection) djControlsSection.classList.remove('hide');
-  }
-
-  function lockDJControls() {
-    if (djControlsSection) djControlsSection.classList.add('hide');
-    if (djLoginSection) djLoginSection.classList.remove('hide');
-  }
-
-  if (btnDjLogout) {
-    btnDjLogout.addEventListener('click', () => {
-      if (confirm("ต้องการออกจากโหมดดีเจใช่หรือไม่?")) {
-        if (isShowLive) socket.emit('dj-end-show');
-        if (isBroadcastingMic && mediaRecorder) {
-          mediaRecorder.stop();
-          isBroadcastingMic = false;
-        }
-        localStorage.removeItem('dj_access_key');
-        lockDJControls();
-        window.location.reload();
-      }
-    });
-  }
-
-  if (btnDjLogin) {
-    btnDjLogin.onclick = () => {
-      modalPassInput.value = '';
-      if (modalError) modalError.classList.add('hide');
-      djModal.classList.remove('hide');
-      modalPassInput.focus();
-    };
-  }
-
-  if (modalBtnCancel) modalBtnCancel.onclick = () => djModal.classList.add('hide');
-  if (modalBtnConfirm) modalBtnConfirm.onclick = () => verifyDJAuth(modalPassInput.value.trim());
-  if (modalPassInput) {
-    modalPassInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') verifyDJAuth(modalPassInput.value.trim());
-    });
-  }
-
-  function verifyDJAuth(pass) {
-    if (!pass) return;
-    socket.emit('dj-auth', pass, (res) => {
-      if (res.success) {
-        localStorage.setItem('dj_access_key', pass);
-        djModal.classList.add('hide');
-        unlockDJControls();
-        isShowLive = res.isLive;
-        updateShowButtonUI();
-      } else {
-        if (modalError) {
-          modalError.textContent = res.message;
-          modalError.classList.remove('hide');
-        }
-      }
-    });
-  }
-
+  // ==========================================
+  // 💬 แชทพร้อมป้ายยศแสดงตำแหน่ง
+  // ==========================================
   let typingTimeout = null;
-  if (chatInput) {
-    chatInput.addEventListener('input', () => {
-      const user = usernameInput.value.trim() || 'Guest';
-      socket.emit('typing-start', user);
-      clearTimeout(typingTimeout);
-      typingTimeout = setTimeout(() => socket.emit('typing-stop'), 2000);
-    });
-  }
+  chatInput.addEventListener('input', () => {
+    socket.emit('typing-start', usernameInput.value.trim() || 'Guest');
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => socket.emit('typing-stop'), 2000);
+  });
 
   function renderMessage(data) {
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble';
-
     const s = data.style || {};
-    const textColor = s.color || '#000000';
-    const textWeight = s.bold ? 'bold' : 'normal';
-    const textStyle = s.italic ? 'italic' : 'normal';
-    const textDecor = s.underline ? 'underline' : 'none';
 
-    const djBadgeHTML = data.isDJ 
-      ? `<span class="dj-badge-tag">🎧 DJ Admin</span>` 
-      : '';
+    let roleTag = '';
+    if (data.role === 'admin') roleTag = `<span class="role-badge-admin">👑 Super Admin</span>`;
+    else if (data.role === 'dj') roleTag = `<span class="role-badge-dj">🎧 On-Air DJ</span>`;
 
-    const statusHTML = data.status 
-      ? `<span class="msn-status-tag">(${data.status})</span>` 
-      : '';
-
+    const statusHTML = data.status ? `<span class="msn-status-tag">(${data.status})</span>` : '';
     bubble.innerHTML = `
       <div class="meta">
-        <span class="user-name">${data.user}</span>${statusHTML}${djBadgeHTML}
+        <span class="user-name">${data.user}</span>${statusHTML}${roleTag}
         <span style="font-weight:normal;color:#888;font-size:11px;">(${data.time})</span>:
       </div>
-      <div class="text" style="color: ${textColor} !important; font-weight: ${textWeight} !important; font-style: ${textStyle} !important; text-decoration: ${textDecor} !important;">
+      <div class="text" style="color: ${s.color || '#000'} !important; font-weight: ${s.bold ? 'bold' : 'normal'} !important; font-style: ${s.italic ? 'italic' : 'normal'} !important; text-decoration: ${s.underline ? 'underline' : 'none'} !important;">
         ${data.text}
       </div>
     `;
     chatLogs.appendChild(bubble);
   }
 
-  socket.on('chat-history', (history) => {
-    chatLogs.innerHTML = '';
-    history.forEach(msg => renderMessage(msg));
-    chatLogs.scrollTop = chatLogs.scrollHeight;
-  });
-
-  socket.on('chat-message', (data) => {
-    renderMessage(data);
-    chatLogs.scrollTop = chatLogs.scrollHeight;
-    playNotificationSound();
-  });
-
-  socket.on('chat-history-cleared', () => {
-    chatLogs.innerHTML = '<div style="text-align:center;color:#888;padding:10px;">--- เริ่มต้นวันใหม่ / ล้างข้อความ ---</div>';
-  });
+  socket.on('chat-history', (h) => { chatLogs.innerHTML = ''; h.forEach(renderMessage); chatLogs.scrollTop = chatLogs.scrollHeight; });
+  socket.on('chat-message', (data) => { renderMessage(data); chatLogs.scrollTop = chatLogs.scrollHeight; playNotificationSound(); });
+  socket.on('chat-history-cleared', () => chatLogs.innerHTML = '<div style="text-align:center;color:#888;padding:10px;">--- เริ่มต้นวันใหม่ / ล้างข้อความ ---</div>');
 
   socket.on('user-typing', (data) => {
-    if (!typingIndicator) return;
-    if (data.isTyping) {
-      typingIndicator.textContent = `✎ ${data.user} กำลังพิมพ์ข้อความ...`;
-      typingIndicator.classList.remove('hide');
-    } else {
-      typingIndicator.textContent = '';
-      typingIndicator.classList.add('hide');
-    }
+    if (data.isTyping) { typingIndicator.textContent = `✎ ${data.user} กำลังพิมพ์...`; typingIndicator.classList.remove('hide'); }
+    else { typingIndicator.textContent = ''; typingIndicator.classList.add('hide'); }
   });
 
   function sendMessage() {
-    const text = chatInput.value.trim();
-    const user = usernameInput.value.trim() || 'Guest';
-    const status = userstatusInput ? userstatusInput.value.trim() : '';
+    const text = chatInput.value.trim(), user = usernameInput.value.trim() || 'Guest', status = userstatusInput.value.trim();
     if (!text) return;
-
-    clearTimeout(typingTimeout);
-    socket.emit('typing-stop');
-
-    socket.emit('chat-message', {
-      user,
-      status,
-      text,
-      style: { ...currentStyle }
-    });
-
-    chatInput.value = '';
-    chatInput.focus();
+    clearTimeout(typingTimeout); socket.emit('typing-stop');
+    socket.emit('chat-message', { user, status, text, style: { ...currentStyle } });
+    chatInput.value = ''; chatInput.focus();
   }
 
-  if (btnSend) btnSend.onclick = sendMessage;
-  if (chatInput) {
-    chatInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-  }
+  btnSend.onclick = sendMessage;
+  chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } });
 
-  if (btnBold) {
-    btnBold.onclick = () => {
-      currentStyle.bold = !currentStyle.bold;
-      btnBold.classList.toggle('active', currentStyle.bold);
-      chatInput.style.fontWeight = currentStyle.bold ? 'bold' : 'normal';
-    };
-  }
-
-  if (btnItalic) {
-    btnItalic.onclick = () => {
-      currentStyle.italic = !currentStyle.italic;
-      btnItalic.classList.toggle('active', currentStyle.italic);
-      chatInput.style.fontStyle = currentStyle.italic ? 'italic' : 'normal';
-    };
-  }
-
-  if (btnUnderline) {
-    btnUnderline.onclick = () => {
-      currentStyle.underline = !currentStyle.underline;
-      btnUnderline.classList.toggle('active', currentStyle.underline);
-      chatInput.style.textDecoration = currentStyle.underline ? 'underline' : 'none';
-    };
-  }
-
-  if (btnEmoji && emojiMenu) {
-    btnEmoji.onclick = (e) => {
-      e.stopPropagation();
-      emojiMenu.classList.toggle('hide');
-    };
-
-    emojiMenu.querySelectorAll('span').forEach(item => {
-      item.onclick = () => {
-        chatInput.value += item.textContent;
-        emojiMenu.classList.add('hide');
-        chatInput.focus();
-      };
-    });
-
-    document.addEventListener('click', () => emojiMenu.classList.add('hide'));
-  }
-
-  if (chatColor) {
-    chatColor.oninput = (e) => {
-      currentStyle.color = e.target.value;
-      chatInput.style.color = currentStyle.color;
-    };
-  }
+  btnBold.onclick = () => { currentStyle.bold = !currentStyle.bold; btnBold.classList.toggle('active', currentStyle.bold); chatInput.style.fontWeight = currentStyle.bold ? 'bold' : 'normal'; };
+  btnItalic.onclick = () => { currentStyle.italic = !currentStyle.italic; btnItalic.classList.toggle('active', currentStyle.italic); chatInput.style.fontStyle = currentStyle.italic ? 'italic' : 'normal'; };
+  btnUnderline.onclick = () => { currentStyle.underline = !currentStyle.underline; btnUnderline.classList.toggle('active', currentStyle.underline); chatInput.style.textDecoration = currentStyle.underline ? 'underline' : 'none'; };
+  btnEmoji.onclick = (e) => { e.stopPropagation(); emojiMenu.classList.toggle('hide'); };
+  emojiMenu.querySelectorAll('span').forEach(item => item.onclick = () => { chatInput.value += item.textContent; emojiMenu.classList.add('hide'); chatInput.focus(); });
+  document.addEventListener('click', () => emojiMenu.classList.add('hide'));
+  chatColor.oninput = (e) => { currentStyle.color = e.target.value; chatInput.style.color = currentStyle.color; };
 
   // ==========================================
   // ⏱️ Main Audio & Track Timer
   // ==========================================
-  let isBroadcastingMic = false;
-  let mediaRecorder = null;
-  let playlist = [];
-  let trackTimerInterval = null;
+  let isBroadcastingMic = false, mediaRecorder = null, playlist = [], trackTimerInterval = null;
+  function formatTime(s) { return `${Math.floor(s/60).toString().padStart(2, '0')}:${Math.floor(s%60).toString().padStart(2, '0')}`; }
 
-  function formatTime(seconds) {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  }
-
-  if (btnListen) {
-    btnListen.onclick = async () => {
-      initAudioContext();
-      if (listenAudioCtx.state === 'suspended') {
-        await listenAudioCtx.resume();
-      }
-      if (isYtReady && ytPlayer && typeof ytPlayer.playVideo === 'function') {
-        ytPlayer.playVideo();
-      }
-      btnListen.textContent = "🔊 กำลังรับฟังสด";
-      btnListen.style.filter = "hue-rotate(90deg)";
-    };
-  }
+  btnListen.onclick = async () => {
+    initAudioContext();
+    if (listenAudioCtx.state === 'suspended') await listenAudioCtx.resume();
+    if (isYtReady && ytPlayer && typeof ytPlayer.playVideo === 'function') ytPlayer.playVideo();
+    btnListen.textContent = "🔊 กำลังรับฟังสด"; btnListen.style.filter = "hue-rotate(90deg)";
+  };
 
   socket.on('listener-audio-stream', async (data) => {
     initAudioContext();
     if (listenAudioCtx.state === 'suspended') await listenAudioCtx.resume();
-
     try {
-      const isObject = data && data.buffer;
-      const bufferData = isObject ? data.buffer : data;
-      const streamType = isObject ? data.type : 'mic';
-
+      const bufferData = data.buffer || data;
+      const streamType = data.type || 'mic';
       const audioBuffer = await listenAudioCtx.decodeAudioData(bufferData.slice(0));
       const source = listenAudioCtx.createBufferSource();
       source.buffer = audioBuffer;
 
       if (streamType === 'music') {
         if (currentMusicSource) currentMusicSource.stop();
-        currentMusicSource = source;
-        source.connect(musicGainNode);
-
+        currentMusicSource = source; source.connect(musicGainNode);
         if (trackTimerInterval) clearInterval(trackTimerInterval);
         const duration = audioBuffer.duration;
-        if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
+        trackTimeTotal.textContent = formatTime(duration);
         let elapsed = 0;
-
         trackTimerInterval = setInterval(() => {
-          elapsed += 1;
-          if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(elapsed);
-          if (trackProgressFill) {
-            const percent = Math.min(100, (elapsed / duration) * 100);
-            trackProgressFill.style.width = `${percent}%`;
-          }
-          if (elapsed >= duration) {
-            clearInterval(trackTimerInterval);
-          }
+          elapsed++;
+          trackTimeCurrent.textContent = formatTime(elapsed);
+          trackProgressFill.style.width = `${Math.min(100, (elapsed / duration) * 100)}%`;
+          if (elapsed >= duration) clearInterval(trackTimerInterval);
         }, 1000);
       } else {
         source.connect(micGainNode);
       }
-
       source.start();
-    } catch (err) {
-      console.error(err);
-    }
+    } catch (e) {}
   });
 
-  socket.on('track-update', (track) => {
-    if (trackTitle) trackTitle.textContent = track.title;
-    if (trackArtist) trackArtist.textContent = track.artist;
-    if (track.title === "รอเริ่มรายการ" || track.title === "จบรายการแล้ว" || track.title === "ดีเจออฟไลน์") {
+  socket.on('track-update', (t) => {
+    trackTitle.textContent = t.title; trackArtist.textContent = t.artist;
+    if (["รอเริ่มรายการ", "จบรายการแล้ว", "ดีเจออฟไลน์"].includes(t.title)) {
       if (trackTimerInterval) clearInterval(trackTimerInterval);
-      if (trackTimeCurrent) trackTimeCurrent.textContent = "00:00";
-      if (trackTimeTotal) trackTimeTotal.textContent = "00:00";
-      if (trackProgressFill) trackProgressFill.style.width = "0%";
+      trackTimeCurrent.textContent = "00:00"; trackTimeTotal.textContent = "00:00"; trackProgressFill.style.width = "0%";
     }
   });
 
   socket.on('playlist-update', (list) => {
-    if (!playlistContainer) return;
     playlistContainer.innerHTML = '';
-    if (!list || list.length === 0) {
-      playlistContainer.innerHTML = '<li>ไม่มีรายการเพลง</li>';
-      return;
-    }
-    list.forEach((t, index) => {
+    if (!list || list.length === 0) { playlistContainer.innerHTML = '<li>ไม่มีรายการเพลง</li>'; return; }
+    list.forEach((t, i) => {
       const li = document.createElement('li');
-      li.textContent = `${index + 1}. ${t.name}`;
+      li.textContent = `${i + 1}. ${t.name}`;
       playlistContainer.appendChild(li);
     });
   });
 
-  if (djFileInput) {
-    djFileInput.onchange = (e) => {
-      const files = Array.from(e.target.files).map(f => {
-        f.type = 'mp3';
-        return f;
-      });
-      playlist = playlist.concat(files);
-      socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
-    };
-  }
+  djFileInput.onchange = (e) => {
+    const files = Array.from(e.target.files).map(f => { f.type = 'mp3'; return f; });
+    playlist = playlist.concat(files);
+    socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
+  };
 
-  // เล่นเพลงถัดไป รองรับทั้ง MP3 และ YouTube
-  if (btnPlayMusic) {
-    btnPlayMusic.onclick = async () => {
-      if (playlist.length === 0) return alert('ไม่มีเพลงในคิว กรุณาเลือกไฟล์ MP3 หรือเพิ่มลิงก์ YouTube ก่อน');
-      
-      const item = playlist.shift();
-      socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
+  btnPlayMusic.onclick = async () => {
+    if (playlist.length === 0) return alert('ไม่มีเพลงในคิว');
+    const item = playlist.shift();
+    socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
+    if (item.type === 'youtube') {
+      if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
+      socket.emit('dj-play-youtube', { videoId: item.videoId, title: item.name });
+    } else {
+      socket.emit('dj-stop-youtube');
+      socket.emit('dj-update-track', { track: { title: item.name, artist: myRole === 'admin' ? "Super Admin (MP3)" : "On-Air DJ (MP3)" } });
+      const ab = await item.arrayBuffer();
+      socket.emit('dj-audio-stream', { type: 'music', buffer: ab });
+    }
+  };
 
-      if (item.type === 'youtube') {
-        if (currentMusicSource) {
-          currentMusicSource.stop();
-          currentMusicSource = null;
-        }
-        socket.emit('dj-play-youtube', { videoId: item.videoId, title: item.name });
-      } else {
-        socket.emit('dj-stop-youtube');
-        socket.emit('dj-update-track', { track: { title: item.name, artist: "DJ On Air (MP3)" } });
-        const arrayBuffer = await item.arrayBuffer();
-        socket.emit('dj-audio-stream', { type: 'music', buffer: arrayBuffer });
-      }
-    };
-  }
-
-  if (btnMic) {
-    btnMic.onclick = async () => {
-      if (!isBroadcastingMic) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorder = new MediaRecorder(stream);
-          mediaRecorder.ondataavailable = async (e) => {
-            if (e.data.size > 0) {
-              const chunk = await e.data.arrayBuffer();
-              socket.emit('dj-audio-stream', { type: 'mic', buffer: chunk });
-            }
-          };
-          mediaRecorder.start(400);
-          btnMic.textContent = "🛑 ปิดไมค์";
-          btnMic.style.filter = "hue-rotate(280deg)";
-          isBroadcastingMic = true;
-        } catch (err) {
-          alert("ไม่สามารถเข้าถึงไมค์: " + err.message);
-        }
-      } else {
-        if (mediaRecorder) mediaRecorder.stop();
-        btnMic.textContent = "🎙️ เปิดไมค์";
-        btnMic.style.filter = "none";
-        isBroadcastingMic = false;
-      }
-    };
-  }
+  btnMic.onclick = async () => {
+    if (!isBroadcastingMic) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = async (e) => {
+          if (e.data.size > 0) socket.emit('dj-audio-stream', { type: 'mic', buffer: await e.data.arrayBuffer() });
+        };
+        mediaRecorder.start(400);
+        btnMic.textContent = "🛑 ปิดไมค์"; btnMic.style.filter = "hue-rotate(280deg)"; isBroadcastingMic = true;
+      } catch (err) { alert("ไม่สามารถเข้าถึงไมค์: " + err.message); }
+    } else {
+      if (mediaRecorder) mediaRecorder.stop();
+      btnMic.textContent = "🎙️ เปิดไมค์"; btnMic.style.filter = "none"; isBroadcastingMic = false;
+    }
+  };
 });

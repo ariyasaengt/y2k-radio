@@ -11,12 +11,9 @@
 <body>
   <canvas id="glitter-canvas"></canvas>
   <div id="heart-container" class="heart-container"></div>
-
-  <!-- ตัวเล่น YouTube แบบซ่อนเบื้องหลัง -->
   <div id="yt-player-hidden" style="position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;"></div>
 
   <div id="main-app-window" class="desktop-wrap">
-    <!-- แถบซ้าย: ควบคุมสถานีวิทยุ -->
     <aside class="window-pane side-bar">
       <div class="window-header">
         <span class="icon-flower">🌸</span>
@@ -35,21 +32,16 @@
       </div>
 
       <div class="side-content">
-        <!-- Now Playing + Visualizer -->
         <div class="section-box">
           <div class="section-title">Now Playing (Main)</div>
           <div class="now-playing-box">
             <div id="track-title" class="track-title">รอเริ่มรายการ</div>
             <div id="track-artist" class="track-sub">Offline</div>
-            
             <div class="track-timer-row">
               <span id="track-time-current">00:00</span>
-              <div class="track-progress-bg">
-                <div id="track-progress-fill" class="track-progress-fill"></div>
-              </div>
+              <div class="track-progress-bg"><div id="track-progress-fill" class="track-progress-fill"></div></div>
               <span id="track-time-total">00:00</span>
             </div>
-
             <canvas id="visualizer-canvas" class="visualizer-bar" width="280" height="35"></canvas>
           </div>
           <div class="btn-group">
@@ -58,7 +50,6 @@
           </div>
         </div>
 
-        <!-- Thai Radio Tuner -->
         <div class="section-box tuner-box">
           <div class="section-title">Thai Radio Tuner (คลื่นวิทยุไทยสด)</div>
           <select id="backup-station-select" class="y2k-select">
@@ -85,21 +76,34 @@
           </ul>
         </div>
 
-        <!-- แผงดีเจ -->
+        <!-- แผงดีเจและแอดมิน -->
         <div class="section-box dj-panel">
-          <div class="section-title">DJ Booth (Admin)</div>
+          <div class="section-title">Broadcast Booth</div>
           
           <div id="dj-login-section">
-            <button id="btn-dj-login" class="y2k-btn primary-btn">🔐 เข้าสู่โหมดดีเจ / แอดมิน</button>
+            <button id="btn-dj-login" class="y2k-btn primary-btn">🔐 เข้าสู่ระบบ (แอดมิน / ดีเจ)</button>
+          </div>
+
+          <!-- กล่องรออนุมัติสำหรับดีเจ -->
+          <div id="dj-pending-section" class="hide" style="text-align: center; padding: 10px; background: #fef9c3; border: 1px solid #facc15; border-radius: 4px;">
+            <div style="font-weight: bold; color: #854d0e;">⏳ กำลังรอแอดมินอนุมัติ...</div>
+            <div style="font-size: 11px; color: #a16207; margin-top: 4px;">เมื่อแอดมินกดอนุมัติ แผงควบคุมจะเปิดขึ้นมาอัตโนมัติ</div>
           </div>
 
           <div id="dj-controls-section" class="dj-controls hide">
             <div class="dj-header-bar">
-              <span class="dj-badge-status">🎧 สิทธิ์: ดีเจออกอากาศ</span>
+              <span id="role-badge" class="dj-badge-status">🎧 สิทธิ์: กำลังโหลด</span>
               <button type="button" id="btn-dj-logout" class="y2k-btn logout-btn">🚪 ออกจากระบบ</button>
             </div>
 
-            <!-- กล่องเลือกไฟล์เพลง MP3 -->
+            <!-- กล่องเฉพาะ Super Admin: อนุมัติดีเจ -->
+            <div id="admin-approval-panel" class="admin-panel hide">
+              <div class="sfx-title">👑 คิวดีเจที่รออนุมัติ (<span id="dj-queue-count">0</span>)</div>
+              <ul id="dj-approval-list" class="requests-list">
+                <li>ไม่มีดีเจรออนุมัติ</li>
+              </ul>
+            </div>
+
             <div class="upload-music-box">
               <label for="dj-file-input" class="y2k-btn primary-btn upload-music-btn">
                 📂 + เลือกไฟล์ MP3 ในเครื่องเข้าคิว
@@ -107,7 +111,6 @@
               <input type="file" id="dj-file-input" accept="audio/*" multiple style="display: none;">
             </div>
 
-            <!-- กล่องเพิ่ม YouTube เข้าคิว -->
             <div class="yt-input-box">
               <span class="sub-label">▶ เพิ่มเพลงจากลิงก์ YouTube เข้าคิว:</span>
               <div class="input-row">
@@ -116,7 +119,6 @@
               </div>
             </div>
 
-            <!-- กล่องคำขอเพลง -->
             <div class="requests-queue-box">
               <div class="sfx-title">📥 เพลงที่คนขอเข้ามา (<span id="req-count">0</span>)</div>
               <ul id="requests-list" class="requests-list">
@@ -186,7 +188,6 @@
       </div>
     </aside>
 
-    <!-- แถบขวา: ห้องแชท -->
     <main class="window-pane chat-window">
       <div class="window-header">
         <span class="icon-bubble">💬</span>
@@ -209,20 +210,15 @@
         <span id="pinned-text" class="pinned-text"></span>
       </div>
 
-      <div class="chat-tab-bar">
-        <div class="tab active">General Room</div>
-      </div>
-
+      <div class="chat-tab-bar"><div class="tab active">General Room</div></div>
       <div id="chat-logs" class="chat-logs"></div>
 
       <div class="chat-input-area">
         <div id="typing-indicator" class="typing-status hide"></div>
-
         <div class="chat-toolbar">
           <button type="button" id="btn-bold" class="tool-btn"><b>B</b></button>
           <button type="button" id="btn-italic" class="tool-btn"><i>I</i></button>
           <button type="button" id="btn-underline" class="tool-btn"><u>U</u></button>
-          
           <div class="pop-wrapper">
             <button type="button" id="btn-emoji" class="tool-btn">😊</button>
             <div id="emoji-menu" class="emoji-picker hide">
@@ -230,19 +226,12 @@
               <span>😭</span><span>🔥</span><span>✨</span><span>🎉</span><span>❤️</span>
             </div>
           </div>
-
           <label class="color-picker-label tool-btn" title="เปลี่ยนสีข้อความ">
             🎨
             <input type="color" id="chat-color" value="#000000">
           </label>
-
-          <button type="button" id="btn-heart-reaction" class="tool-btn heart-btn" title="กดส่งหัวใจให้ดีเจและเพื่อนๆ">
-            💖
-          </button>
-
-          <button type="button" id="btn-nudge" class="tool-btn nudge-btn" title="ส่งสัญญาณสะกิด MSN สั่นหน้าจอ!">
-            💥 สะกิด
-          </button>
+          <button type="button" id="btn-heart-reaction" class="tool-btn heart-btn" title="กดส่งหัวใจให้ดีเจและเพื่อนๆ">💖</button>
+          <button type="button" id="btn-nudge" class="tool-btn nudge-btn" title="ส่งสัญญาณสะกิด MSN สั่นหน้าจอ!">💥 สะกิด</button>
         </div>
 
         <div class="input-row" style="margin-bottom: 5px;">
@@ -256,9 +245,7 @@
         </div>
       </div>
       
-      <div class="banner-bottom">
-        <span>Retro Sound Wave 2000 • High Fidelity Stereo</span>
-      </div>
+      <div class="banner-bottom"><span>Retro Sound Wave 2000 • High Fidelity Stereo</span></div>
     </main>
   </div>
 
@@ -289,10 +276,10 @@
     <div class="window-pane modal-box">
       <div class="window-header">
         <span class="icon-flower">🔐</span>
-        <span class="title">DJ Authentication</span>
+        <span class="title">Authentication</span>
       </div>
       <div class="modal-body">
-        <p style="margin-bottom: 6px;">กรุณากรอกรหัสผ่านประจำตัวดีเจ:</p>
+        <p style="margin-bottom: 6px;">กรุณากรอกรหัสผ่าน (แอดมิน หรือ ดีเจ):</p>
         <input type="password" id="modal-pass-input" class="y2k-input" placeholder="ใส่รหัสผ่าน...">
         <div id="modal-error" class="error-msg hide">รหัสผ่านไม่ถูกต้อง!</div>
         <div class="modal-actions">
@@ -304,6 +291,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>
