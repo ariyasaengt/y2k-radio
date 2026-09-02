@@ -13,10 +13,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const DJ_SECRET_KEY = "1234";
 
-let isDJLive = false; // เช็กสถานะว่าเริ่มรายการแล้วหรือยัง
-let activeDJSockets = new Set(); // เก็บ socket ของดีเจที่ออนไลน์
-
+let isDJLive = false;
+let activeDJSockets = new Set();
 let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline" };
+let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨"; // หัวข้อเริ่มต้น
 let playlist = [];
 let chatHistory = [];
 let currentDay = new Date().toLocaleDateString('th-TH');
@@ -26,20 +26,21 @@ function checkDayReset() {
   if (today !== currentDay) {
     chatHistory = [];
     currentDay = today;
+    todayTopic = "วันนี้เปิดรับทุกแนวเพลง ทักทายกันได้นะ!";
     io.emit('chat-history-cleared');
+    io.emit('topic-update', todayTopic);
   }
 }
 
 io.on('connection', (socket) => {
   checkDayReset();
 
-  // ส่งสถานะปัจจุบันให้ผู้ฟัง
   socket.emit('dj-status-update', isDJLive);
   socket.emit('track-update', currentTrack);
+  socket.emit('topic-update', todayTopic);
   socket.emit('playlist-update', playlist);
   socket.emit('chat-history', chatHistory);
 
-  // แชท
   socket.on('chat-message', (data) => {
     checkDayReset();
     const newMsg = {
@@ -53,7 +54,6 @@ io.on('connection', (socket) => {
     io.emit('chat-message', newMsg);
   });
 
-  // ยืนยันสิทธิ์ดีเจ
   socket.on('dj-auth', (key, callback) => {
     if (key === DJ_SECRET_KEY) {
       socket.isDJ = true;
@@ -64,14 +64,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ดีเจกดเริ่มจัดรายการ
+  // อัปเดตหัวข้อประจำวัน (เฉพาะดีเจ)
+  socket.on('dj-set-topic', (newTopic) => {
+    if (!socket.isDJ) return;
+    todayTopic = newTopic.trim() || "เปิดเพลงสบายๆ สไตล์ Y2K";
+    io.emit('topic-update', todayTopic);
+  });
+
   socket.on('dj-start-show', () => {
     if (!socket.isDJ) return;
     isDJLive = true;
     io.emit('dj-status-update', true);
   });
 
-  // ดีเจกดจบรายการ
   socket.on('dj-end-show', () => {
     if (!socket.isDJ) return;
     isDJLive = false;
@@ -97,7 +102,6 @@ io.on('connection', (socket) => {
     socket.broadcast.emit('listener-audio-stream', audioChunk);
   });
 
-  // เมื่อดีเจปิดหน้าเว็บ หรือเน็ตหลุด
   socket.on('disconnect', () => {
     if (socket.isDJ) {
       activeDJSockets.delete(socket.id);

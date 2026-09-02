@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const trackArtist = document.getElementById('track-artist');
   const playlistContainer = document.getElementById('playlist-container');
   const btnListen = document.getElementById('btn-listen');
+  const displayTopic = document.getElementById('display-topic');
 
   // Backup Radio Tuner
   const backupStationSelect = document.getElementById('backup-station-select');
@@ -24,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const djFileInput = document.getElementById('dj-file-input');
   const btnPlayMusic = document.getElementById('btn-play-music');
   const btnMic = document.getElementById('btn-mic');
+  const djTopicInput = document.getElementById('dj-topic-input');
+  const btnSaveTopic = document.getElementById('btn-save-topic');
 
   // Modal
   const djModal = document.getElementById('dj-modal');
@@ -43,7 +46,32 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentStyle = { bold: false, italic: false, underline: false, color: '#000000' };
   let isShowLive = false;
 
-  // --- ระบบคลื่นสำรอง (Backup Tuner) ---
+  // --- อัปเดตหัวข้อประจำวัน ---
+  socket.on('topic-update', (topic) => {
+    if (displayTopic) displayTopic.textContent = topic;
+  });
+
+  if (btnSaveTopic) {
+    btnSaveTopic.addEventListener('click', () => {
+      const newTopic = djTopicInput.value.trim();
+      if (!newTopic) return;
+      socket.emit('dj-set-topic', newTopic);
+      djTopicInput.value = '';
+    });
+  }
+
+  if (djTopicInput) {
+    djTopicInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const newTopic = djTopicInput.value.trim();
+        if (!newTopic) return;
+        socket.emit('dj-set-topic', newTopic);
+        djTopicInput.value = '';
+      }
+    });
+  }
+
+  // --- ระบบคลื่นสำรอง ---
   backupStationSelect.addEventListener('change', (e) => {
     const streamUrl = e.target.value;
     if (streamUrl) {
@@ -55,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- รับสถานะ On Air / Offline ของสถานีหลัก ---
+  // --- สถานะ On Air / Offline ---
   socket.on('dj-status-update', (isLive) => {
     isShowLive = isLive;
     if (isLive) {
@@ -81,7 +109,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // --- ปุ่ม On Air / Off Air ---
   btnShowToggle.addEventListener('click', () => {
     if (!isShowLive) {
       socket.emit('dj-start-show');
@@ -92,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- จดจำชื่อเล่นและสิทธิ์ดีเจ ---
+  // --- สิทธิ์ดีเจ และ Username ---
   if (localStorage.getItem('saved_username')) {
     usernameInput.value = localStorage.getItem('saved_username');
   }
@@ -147,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- แชทและ Toolbar ---
+  // --- แชทและข้อความ ---
   function renderMessage(data) {
     const bubble = document.createElement('div');
     bubble.className = 'chat-bubble';
@@ -212,6 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // Formatting Toolbar
   btnBold.onclick = () => {
     currentStyle.bold = !currentStyle.bold;
     btnBold.classList.toggle('active', currentStyle.bold);
@@ -250,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
     chatInput.style.color = currentStyle.color;
   };
 
-  // --- Audio Player สถานีหลัก ---
+  // Main Audio
   let listenAudioCtx = null;
   let isBroadcastingMic = false;
   let mediaRecorder = null;
@@ -300,7 +328,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // เครื่องมือดีเจ
   djFileInput.onchange = (e) => {
     playlist = Array.from(e.target.files);
     socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name })));

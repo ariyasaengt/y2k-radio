@@ -15,7 +15,6 @@
         <span class="title">Radio Controller</span>
       </div>
       
-      <!-- ป้ายสถานะสถานีหลัก -->
       <div class="user-badge">
         <div class="avatar-box">📻</div>
         <div class="user-meta">
@@ -25,7 +24,6 @@
       </div>
 
       <div class="side-content">
-        <!-- กล่อง Now Playing ของสถานีหลัก -->
         <div class="section-box">
           <div class="section-title">Now Playing (Main)</div>
           <div class="now-playing-box">
@@ -35,19 +33,18 @@
           <button id="btn-listen" class="y2k-btn primary-btn">▶ ฟังสถานีหลัก</button>
         </div>
 
-        <!-- กล่องคลื่นวิทยุสำรอง (เปิดฟังเพลงชิลล์ได้เมื่อไม่มีดีเจ) -->
         <div class="section-box tuner-box">
-          <div class="section-title">Backup Tuner (คลื่นสำรอง)</div>
+          <div class="section-title">Thai Radio Tuner (คลื่นไทย)</div>
           <select id="backup-station-select" class="y2k-select">
-            <option value="">-- เลือกคลื่นฟังระหว่างรอดีเจ --</option>
-            <option value="https://stream.zeno.fm/f3wvbbqmdg8uv">Lofi Chill Beats</option>
-            <option value="https://stream.zeno.fm/0r0xa792kwzuv">CityPop & 80s Retro</option>
-            <option value="https://stream.zeno.fm/7c22e415ptzuv">Smooth Jazz Cafe</option>
+            <option value="">-- เลือกคลื่นวิทยุไทย --</option>
+            <option value="https://media.onair.one:8170/media">PASSION FM 8170 (เพลงไทยสากล/ฮิต)</option>
+            <option value="https://media.onair.one:8170/ColorMusic">ColorMusic Thailand (เพลงไทยสบายๆ)</option>
+            <option value="https://media.onair.one:8170/DAB1">FUNG Live 8170 (เพลงไทยฟังสบาย)</option>
+            <option value="https://cdn-th2.login.in.th/shoutcast/8420">Radio Thailand (สถานีวิทยุแห่งประเทศไทย)</option>
           </select>
           <audio id="backup-audio-player" controls style="width: 100%; height: 28px; margin-top: 6px;"></audio>
         </div>
 
-        <!-- กล่องคิวเพลง -->
         <div class="section-box playlist-section">
           <div class="section-title">Playlist Queue</div>
           <ul id="playlist-container" class="playlist-list">
@@ -55,7 +52,6 @@
           </ul>
         </div>
 
-        <!-- แผงดีเจ / แอดมิน -->
         <div class="section-box dj-panel">
           <div class="section-title">DJ Booth (Admin)</div>
           
@@ -64,8 +60,16 @@
           </div>
 
           <div id="dj-controls-section" class="dj-controls hide">
-            <!-- ปุ่มเริ่ม/จบรายการ -->
-            <div class="show-control-group">
+            <!-- ตั้งหัวข้อประจำวัน -->
+            <div class="topic-setter-box">
+              <span class="sub-label">✏️ หัวข้อจัดรายการวันนี้:</span>
+              <div class="input-row">
+                <input type="text" id="dj-topic-input" class="y2k-input flex-1" placeholder="เช่น เอาใจคนอกหัก...">
+                <button id="btn-save-topic" class="y2k-btn">📢 ตั้งหัวข้อ</button>
+              </div>
+            </div>
+
+            <div class="show-control-group" style="margin-top: 8px;">
               <button id="btn-show-toggle" class="y2k-btn on-air-btn">🔴 เริ่มจัดรายการ (Go Live)</button>
             </div>
 
@@ -86,6 +90,12 @@
       <div class="window-header">
         <span class="icon-bubble">💬</span>
         <span class="title">Live Chat & Shoutbox</span>
+      </div>
+
+      <!-- ป้ายหัวข้อใหญ่ประจำวัน (Topic of the Day Banner) -->
+      <div class="topic-banner">
+        <div class="topic-tag">🌟 TOPIC TODAY</div>
+        <div id="display-topic" class="topic-text">กำลังโหลดหัวข้อ...</div>
       </div>
 
       <div class="chat-tab-bar">
@@ -127,7 +137,6 @@
     </main>
   </div>
 
-  <!-- กล่องใส่รหัสดีเจ -->
   <div id="dj-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -147,6 +156,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
