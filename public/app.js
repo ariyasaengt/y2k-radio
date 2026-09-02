@@ -122,6 +122,140 @@ document.addEventListener('DOMContentLoaded', () => {
   let playlist = [];
 
   // ==========================================
+  // 🎥 ระบบเล่น YouTube แบบ Robust Direct Embed
+  // ==========================================
+  let currentYtVideoId = null;
+  let ytTrackDuration = 0;
+  let ytTrackElapsed = 0;
+  const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
+
+  function sendIframeCommand(func, args = []) {
+    const iframe = document.querySelector('#yt-screen-wrapper iframe');
+    if (iframe && iframe.contentWindow) {
+      iframe.contentWindow.postMessage(JSON.stringify({
+        event: 'command',
+        func: func,
+        args: args
+      }), '*');
+    }
+  }
+
+  function playYouTubeTrack(videoId, title, seekTo = 0) {
+    if (!videoId) return;
+    currentYtVideoId = videoId;
+
+    if (ytScreenWrapper) {
+      ytScreenWrapper.classList.remove('hide');
+      const startSec = Math.floor(seekTo || 0);
+      const isMuted = !isListeningToMain ? 1 : 0;
+      
+      // สร้าง iframe โดยตรง ไม่พึ่งพา asynchronous loader
+      ytScreenWrapper.innerHTML = `
+        <iframe id="active-yt-iframe"
+          width="100%" height="140"
+          src="https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&playsinline=1&controls=1&rel=0&start=${startSec}&mute=${isMuted}&origin=${encodeURIComponent(window.location.origin)}"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowfullscreen>
+        </iframe>
+      `;
+    }
+
+    if (trackTitle) trackTitle.textContent = title || "YouTube Track";
+    if (trackArtist) trackArtist.textContent = "YouTube Broadcast";
+
+    if (isListeningToMain && userstatusInput && (!userstatusInput.value || userstatusInput.value.startsWith('🎵 กำลังฟัง:'))) {
+      userstatusInput.value = `🎵 กำลังฟัง: ${title.replace('▶ [YT] ', '')}`;
+    }
+
+    // จัดการ Timer
+    if (trackTimerInterval) clearInterval(trackTimerInterval);
+    ytTrackElapsed = Math.floor(seekTo || 0);
+    ytTrackDuration = 240; // ค่าเริ่มต้นถ้ายังดึงไม่ได้
+
+    trackTimerInterval = setInterval(() => {
+      ytTrackElapsed++;
+      if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(ytTrackElapsed);
+      if (trackTimeTotal) trackTimeTotal.textContent = formatTime(ytTrackDuration);
+      if (trackProgressFill) trackProgressFill.style.width = `${Math.min(100, (ytTrackElapsed / ytTrackDuration) * 100)}%`;
+
+      // เช็คถ้าเพลงจบ ให้ดีเจ/แอดมินสั่งเพลงถัดไป
+      if (ytTrackDuration > 0 && ytTrackElapsed >= ytTrackDuration) {
+        clearInterval(trackTimerInterval);
+        if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
+          playItemAtIndex(0);
+        }
+      }
+    }, 1000);
+  }
+
+  // ดักรับความยาวเพลงจริงและสถานะจบจาก YouTube PostMessage
+  window.addEventListener('message', (e) => {
+    try {
+      if (typeof e.data !== 'string') return;
+      const data = JSON.parse(e.data);
+      if (data.event === 'infoDelivery' && data.info) {
+        if (data.info.duration && data.info.duration > 0) {
+          ytTrackDuration = Math.floor(data.info.duration);
+          if (trackTimeTotal) trackTimeTotal.textContent = formatTime(ytTrackDuration);
+        }
+        if (data.info.currentTime !== undefined) {
+          ytTrackElapsed = Math.floor(data.info.currentTime);
+          if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(ytTrackElapsed);
+        }
+        // State 0 คือคลิปจบ
+        if (data.info.playerState === 0) {
+          if (trackTimerInterval) clearInterval(trackTimerInterval);
+          if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
+            playItemAtIndex(0);
+          }
+        }
+      }
+    } catch(err) {}
+  });
+
+  socket.on('radio-sync-pulse', (data) => {
+    if (currentYtVideoId === data.videoId) {
+      if (Math.abs(ytTrackElapsed - data.currentTime) > 3) {
+        ytTrackElapsed = Math.floor(data.currentTime);
+        sendIframeCommand('seekTo', [data.currentTime, true]);
+      }
+    }
+  });
+
+  socket.on('play-youtube-track', (data) => {
+    initAudioContext();
+    if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
+    playYouTubeTrack(data.videoId, data.title, data.seekTo || 0);
+  });
+
+  socket.on('dj-stop-youtube', () => {
+    currentYtVideoId = null;
+    if (ytScreenWrapper) {
+      ytScreenWrapper.innerHTML = '';
+      ytScreenWrapper.classList.add('hide');
+    }
+    if (trackTimerInterval) clearInterval(trackTimerInterval);
+  });
+
+  function extractYouTubeID(url) {
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    return match ? match[1] : null;
+  }
+
+  if (btnPlayYt) {
+    btnPlayYt.addEventListener('click', () => {
+      const url = djYtUrl.value.trim();
+      if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
+      const videoId = extractYouTubeID(url);
+      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง!");
+
+      socket.emit('dj-add-youtube-to-playlist', { videoId: videoId });
+      djYtUrl.value = '';
+    });
+  }
+
+  // ==========================================
   // 🚪 ระบบเปิด/ปิด Modal (Safe Handlers)
   // ==========================================
   if (btnOpenLoginModal && loginModal) {
@@ -132,9 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loginUserInput.focus();
     };
   }
-  if (loginBtnCancel && loginModal) {
-    loginBtnCancel.onclick = () => loginModal.classList.add('hide');
-  }
+  if (loginBtnCancel && loginModal) loginBtnCancel.onclick = () => loginModal.classList.add('hide');
 
   if (btnOpenRegisterModal && registerModal) {
     btnOpenRegisterModal.onclick = () => {
@@ -144,9 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
       regUserInput.focus();
     };
   }
-  if (regBtnCancel && registerModal) {
-    regBtnCancel.onclick = () => registerModal.classList.add('hide');
-  }
+  if (regBtnCancel && registerModal) regBtnCancel.onclick = () => registerModal.classList.add('hide');
 
   if (btnOpenRequestModal && requestModal) {
     btnOpenRequestModal.onclick = () => {
@@ -155,11 +285,8 @@ document.addEventListener('DOMContentLoaded', () => {
       reqSongInput.focus();
     };
   }
-  if (reqBtnCancel && requestModal) {
-    reqBtnCancel.onclick = () => requestModal.classList.add('hide');
-  }
+  if (reqBtnCancel && requestModal) reqBtnCancel.onclick = () => requestModal.classList.add('hide');
 
-  // ส่งของขวัญให้ดีเจ
   giftButtons.forEach(btn => {
     btn.onclick = () => {
       const giftType = btn.getAttribute('data-gift');
@@ -174,9 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   });
 
-  // ----------------------------------------------------
-  // 🔨 ดักรับเหตุการณ์ถูกเตะ หรือ ถูกแบน
-  // ----------------------------------------------------
   socket.on('kicked-notice', (data) => {
     alert(`⚠️ ${data.reason}`);
     window.location.reload();
@@ -202,135 +326,8 @@ document.addEventListener('DOMContentLoaded', () => {
     chatLogs.scrollTop = chatLogs.scrollHeight;
   });
 
-  // ==========================================
-  // 🎥 YouTube IFrame Player (Sync Time Lock)
-  // ==========================================
-  let ytPlayer = null;
-  let isYtReady = false;
-  let pendingVideoId = null;
-  let pendingSeekTime = 0;
-  const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
-
-  window.onYouTubeIframeAPIReady = function() {
-    ytPlayer = new YT.Player('yt-player-element', {
-      height: '140',
-      width: '100%',
-      playerVars: {
-        'autoplay': 1,
-        'controls': 1,
-        'rel': 0,
-        'playsinline': 1
-      },
-      events: {
-        'onReady': () => {
-          isYtReady = true;
-          if (pendingVideoId) {
-            playYouTubeTrack(pendingVideoId, trackTitle.textContent, pendingSeekTime);
-            pendingVideoId = null;
-          }
-        },
-        'onStateChange': (e) => {
-          if (e.data === YT.PlayerState.PLAYING) {
-            if (trackTimerInterval) clearInterval(trackTimerInterval);
-            const duration = ytPlayer.getDuration();
-            if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
-            trackTimerInterval = setInterval(() => {
-              if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
-              const current = ytPlayer.getCurrentTime();
-              if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(current);
-              if (trackProgressFill) trackProgressFill.style.width = `${Math.min(100, (current / duration) * 100)}%`;
-            }, 1000);
-          }
-
-          if (e.data === YT.PlayerState.ENDED) {
-            if (trackTimerInterval) clearInterval(trackTimerInterval);
-            if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
-              playItemAtIndex(0);
-            }
-          }
-        }
-      }
-    });
-  };
-
-  function playYouTubeTrack(videoId, title, seekTo = 0) {
-    if (ytScreenWrapper) ytScreenWrapper.classList.remove('hide');
-    if (trackTitle) trackTitle.textContent = title || "YouTube Track";
-    if (trackArtist) trackArtist.textContent = "YouTube Broadcast";
-
-    // อัปเดต MSN Status Now Listening เมื่อกำลังฟังสด
-    if (isListeningToMain && userstatusInput && (!userstatusInput.value || userstatusInput.value.startsWith('🎵 กำลังฟัง:'))) {
-      userstatusInput.value = `🎵 กำลังฟัง: ${title.replace('▶ [YT] ', '')}`;
-    }
-
-    if (isYtReady && ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
-      ytPlayer.loadVideoById({
-        videoId: videoId,
-        startSeconds: Math.floor(seekTo)
-      });
-
-      setTimeout(() => {
-        if (ytPlayer && typeof ytPlayer.seekTo === 'function') {
-          ytPlayer.seekTo(seekTo, true);
-        }
-      }, 500);
-
-      if (!isListeningToMain) {
-        ytPlayer.mute();
-      } else {
-        ytPlayer.unMute();
-        ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
-      }
-      ytPlayer.playVideo();
-    } else {
-      pendingVideoId = videoId;
-      pendingSeekTime = seekTo;
-    }
-  }
-
-  socket.on('radio-sync-pulse', (data) => {
-    if (!isYtReady || !ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
-    const currentUrl = ytPlayer.getVideoUrl ? ytPlayer.getVideoUrl() : '';
-    if (currentUrl.includes(data.videoId)) {
-      const myTime = ytPlayer.getCurrentTime();
-      if (Math.abs(myTime - data.currentTime) > 2.5) {
-        ytPlayer.seekTo(data.currentTime, true);
-      }
-    }
-  });
-
-  socket.on('play-youtube-track', (data) => {
-    initAudioContext();
-    if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
-    playYouTubeTrack(data.videoId, data.title, data.seekTo || 0);
-  });
-
-  socket.on('dj-stop-youtube', () => {
-    if (ytScreenWrapper) ytScreenWrapper.classList.add('hide');
-    if (isYtReady && ytPlayer && typeof ytPlayer.stopVideo === 'function') {
-      ytPlayer.stopVideo();
-    }
-  });
-
-  function extractYouTubeID(url) {
-    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-    return match ? match[1] : null;
-  }
-
-  if (btnPlayYt) {
-    btnPlayYt.addEventListener('click', () => {
-      const url = djYtUrl.value.trim();
-      if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
-      const videoId = extractYouTubeID(url);
-      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง!");
-
-      socket.emit('dj-add-youtube-to-playlist', { videoId: videoId });
-      djYtUrl.value = '';
-    });
-  }
-
   // ========================================================
-  // 📻 Thai Radio Streams (Direct Stream)
+  // 📻 Thai Radio Streams
   // ========================================================
   if (backupStationSelect) {
     backupStationSelect.addEventListener('change', (e) => {
@@ -347,7 +344,6 @@ document.addEventListener('DOMContentLoaded', () => {
       backupAudioPlayer.pause();
       backupAudioPlayer.src = streamUrl;
       backupAudioPlayer.load();
-
       const playPromise = backupAudioPlayer.play();
       if (playPromise !== undefined) playPromise.catch(() => {});
     });
@@ -459,9 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e) {}
   }
 
-  if (btnRequestToLive) {
-    btnRequestToLive.onclick = () => socket.emit('dj-request-queue');
-  }
+  if (btnRequestToLive) btnRequestToLive.onclick = () => socket.emit('dj-request-queue');
   socket.on('dj-queue-waiting', () => {
     if (btnRequestToLive) btnRequestToLive.classList.add('hide');
     if (djPortalWaitingText) djPortalWaitingText.classList.remove('hide');
@@ -540,9 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     bannedUsersList.querySelectorAll('.unban-btn').forEach(b => {
       b.onclick = () => {
         const ip = b.getAttribute('data-ip');
-        if (confirm(`ต้องการปลดแบน IP "${ip}" หรือไม่?`)) {
-          socket.emit('admin-unban-ip', ip);
-        }
+        if (confirm(`ต้องการปลดแบน IP "${ip}" หรือไม่?`)) socket.emit('admin-unban-ip', ip);
       };
     });
   });
@@ -799,9 +791,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (musicGainNode && vols.music !== undefined) musicGainNode.gain.setValueAtTime(vols.music, listenAudioCtx.currentTime);
       if (micGainNode && vols.mic !== undefined) micGainNode.gain.setValueAtTime(vols.mic, listenAudioCtx.currentTime);
     }
-    if (isYtReady && ytPlayer && vols.music !== undefined && isListeningToMain) {
-      ytPlayer.setVolume(Math.round(vols.music * 100));
-    }
   });
 
   if (sliderMusicVol) {
@@ -810,7 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (labelMusicVol) labelMusicVol.textContent = `${val}%`;
       socket.emit('dj-volume-change', { type: 'music', volume: val / 100 });
       if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(val / 100, listenAudioCtx.currentTime);
-      if (isYtReady && ytPlayer && isListeningToMain) ytPlayer.setVolume(val);
+      sendIframeCommand('setVolume', [val]);
     });
   }
 
@@ -830,13 +819,13 @@ document.addEventListener('DOMContentLoaded', () => {
         sliderMusicVol.value = 20; if (labelMusicVol) labelMusicVol.textContent = "20%";
         socket.emit('dj-volume-change', { type: 'music', volume: 0.2 });
         if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(0.2, listenAudioCtx.currentTime);
-        if (isYtReady && ytPlayer && isListeningToMain) ytPlayer.setVolume(20);
+        sendIframeCommand('setVolume', [20]);
         btnDucking.classList.add('active'); btnDucking.textContent = "🔊 คืนระดับเสียงเดิม"; isDucking = true;
       } else {
         sliderMusicVol.value = previousMusicVol; if (labelMusicVol) labelMusicVol.textContent = `${previousMusicVol}%`;
         socket.emit('dj-volume-change', { type: 'music', volume: previousMusicVol / 100 });
         if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(previousMusicVol / 100, listenAudioCtx.currentTime);
-        if (isYtReady && ytPlayer && isListeningToMain) ytPlayer.setVolume(previousMusicVol);
+        sendIframeCommand('setVolume', [previousMusicVol]);
         btnDucking.classList.remove('active'); btnDucking.textContent = "🔉 หรี่เพลงพูดไมค์ (Ducking)"; isDucking = false;
       }
     };
@@ -870,7 +859,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // 💬 แชท & Moderation Tools (เตะ/แบน)
+  // 💬 แชท
   // ==========================================
   let typingTimeout = null;
   if (chatInput) {
@@ -881,7 +870,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // แปลงคีย์เวิร์ด MSN เป็นอิโมจิดุ๊กดิ๊ก
   function parseMSNEmoticons(text) {
     return text
       .replace(/\(H\)/gi, '😎')
@@ -998,9 +986,8 @@ document.addEventListener('DOMContentLoaded', () => {
   if (chatColor) chatColor.oninput = (e) => { currentStyle.color = e.target.value; if (chatInput) chatInput.style.color = currentStyle.color; };
 
   // ==========================================
-  // ⏱️ Audio Streaming & ควบคุมปุ่มฟังสถานีหลัก
+  // ⏱️ ควบคุมปุ่มฟังสถานีหลัก
   // ==========================================
-  let trackTimerInterval = null;
   function formatTime(s) { return `${Math.floor(s/60).toString().padStart(2, '0')}:${Math.floor(s%60).toString().padStart(2, '0')}`; }
 
   function startListeningMainStation() {
@@ -1008,14 +995,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (listenAudioCtx.state === 'suspended') listenAudioCtx.resume();
     if (backupAudioPlayer) backupAudioPlayer.pause();
 
-    if (isYtReady && ytPlayer) {
-      ytPlayer.unMute();
-      ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
-      if (lastKnownTrack && lastKnownTrack.startedAt) {
-        const syncSec = Math.max(0, (Date.now() - lastKnownTrack.startedAt) / 1000);
-        ytPlayer.seekTo(syncSec, true);
-      }
-    }
+    // ปลด Mute สำหรับ YouTube IFrame
+    sendIframeCommand('unMute');
+    sendIframeCommand('setVolume', [sliderMusicVol ? parseInt(sliderMusicVol.value) : 80]);
 
     isListeningToMain = true;
     if (btnListen) {
@@ -1026,7 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function stopListeningMainStation() {
     if (listenAudioCtx && listenAudioCtx.state === 'running') listenAudioCtx.suspend();
-    if (isYtReady && ytPlayer && typeof ytPlayer.mute === 'function') ytPlayer.mute();
+    sendIframeCommand('mute');
 
     isListeningToMain = false;
     if (btnListen) {
@@ -1104,9 +1086,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  let lastKnownTrack = null;
   socket.on('track-update', (t) => {
-    lastKnownTrack = t;
     if (trackTitle) trackTitle.textContent = t.title;
     if (trackArtist) trackArtist.textContent = t.artist;
     if (["รอเริ่มรายการ", "จบรายการแล้ว", "ดีเจออฟไลน์"].includes(t.title)) {
@@ -1114,7 +1094,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (trackTimeCurrent) trackTimeCurrent.textContent = "00:00";
       if (trackTimeTotal) trackTimeTotal.textContent = "00:00";
       if (trackProgressFill) trackProgressFill.style.width = "0%";
-      if (ytScreenWrapper) ytScreenWrapper.classList.add('hide');
+      if (ytScreenWrapper) {
+        ytScreenWrapper.innerHTML = '';
+        ytScreenWrapper.classList.add('hide');
+      }
     }
   });
 
@@ -1190,7 +1173,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================
-  // 🎙️ ไมค์ดีเจ (Web Audio API PCM Float32)
+  // 🎙️ ไมค์ดีเจ
   // ========================================================
   let micStream = null;
   let micAudioCtx = null;
