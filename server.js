@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
@@ -9,6 +10,48 @@ const server = http.createServer(app);
 const io = new Server(server, { maxHttpBufferSize: 1e7 });
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ========================================================
+// 📻 Audio Stream Proxy (แก้ปัญหา Mixed Content & SSL มาร์กเกอร์)
+// ========================================================
+app.get('/api/radio-stream', (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl) return res.status(400).send("No stream URL specified");
+
+  try {
+    const parsedUrl = new URL(targetUrl);
+    const client = parsedUrl.protocol === 'https:' ? https : http;
+
+    const requestOptions = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
+        'Icy-MetaData': '0'
+      },
+      rejectUnauthorized: false // ข้ามปัญหา SSL ใบรับรองไม่ตรงของคลื่นวิทยุ
+    };
+
+    const proxyReq = client.get(targetUrl, requestOptions, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, {
+        'Content-Type': proxyRes.headers['content-type'] || 'audio/mpeg',
+        'Cache-Control': 'no-cache, no-store',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      });
+      proxyRes.pipe(res);
+    });
+
+    proxyReq.on('error', (err) => {
+      console.error("Radio proxy error:", err.message);
+      if (!res.headersSent) res.status(502).send("Cannot connect to radio stream");
+    });
+
+    req.on('close', () => {
+      proxyReq.destroy();
+    });
+  } catch (e) {
+    res.status(500).send("Invalid stream URL");
+  }
+});
 
 // รหัสผ่าน Super Admin
 const ADMIN_SECRET_KEY = "0024252600";
@@ -21,7 +64,7 @@ let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ข�
 let pinnedMessage = null;
 let playlist = [];
 let songRequests = [];
-let djQueue = []; // [{ socketId, username, time }]
+let djQueue = [];
 
 let onlineUsersCount = 0;
 let currentVolumes = { music: 0.8, mic: 1.0 };
@@ -30,7 +73,7 @@ const CHAT_FILE = path.join(__dirname, 'chat_history.json');
 let chatHistory = [];
 
 const DJS_FILE = path.join(__dirname, 'djs_database.json');
-let registeredDJs = {}; // { username: password }
+let registeredDJs = {};
 
 function loadRegisteredDJs() {
   try {

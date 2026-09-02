@@ -111,24 +111,30 @@ document.addEventListener('DOMContentLoaded', () => {
   let isDucking = false;
   let previousMusicVol = 80;
 
-  // ==========================================
-  // 📻 Thai Radio Streams (Direct HTTPS Audio)
-  // ==========================================
+  // ========================================================
+  // 📻 Thai Radio Streams (เชื่อมต่อผ่าน Audio Proxy หลังบ้าน)
+  // ========================================================
   if (backupStationSelect) {
     backupStationSelect.addEventListener('change', (e) => {
-      const streamUrl = e.target.value;
-      if (!streamUrl) {
+      const rawStreamUrl = e.target.value;
+      if (!rawStreamUrl) {
         backupAudioPlayer.pause();
         backupAudioPlayer.removeAttribute('src');
         backupAudioPlayer.load();
         return;
       }
+
+      // วิ่งผ่าน Proxy แก้ไข Mixed Content และ SSL Block
+      const proxiedUrl = `/api/radio-stream?url=${encodeURIComponent(rawStreamUrl)}`;
       backupAudioPlayer.pause();
-      backupAudioPlayer.src = streamUrl;
+      backupAudioPlayer.src = proxiedUrl;
       backupAudioPlayer.load();
+
       const playPromise = backupAudioPlayer.play();
       if (playPromise !== undefined) {
-        playPromise.catch((err) => console.warn("Autoplay blocked:", err));
+        playPromise.catch((err) => {
+          console.warn("Autoplay blocked or connecting:", err);
+        });
       }
     });
   }

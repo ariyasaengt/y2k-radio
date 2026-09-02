@@ -51,21 +51,22 @@
           </div>
         </div>
 
-        <!-- Thai Radio Tuner (Public HTTPS Stream ไม่ติด CORS) -->
+        <!-- Thai Radio Tuner (เชื่อมผ่าน Proxy หลังบ้าน) -->
         <div class="section-box tuner-box">
           <div class="section-title">Thai Radio Tuner (คลื่นวิทยุไทยสด)</div>
           <select id="backup-station-select" class="y2k-select">
             <option value="">-- เลือกคลื่นวิทยุไทยยอดนิยม --</option>
             <optgroup label="🎵 เพลงสตริง / สากลฮิต">
-              <option value="https://stream.zeno.fm/0r0xa792kwzuv">CityPop & Retro Asian Pop (24 ชม.)</option>
-              <option value="https://stream.zeno.fm/u2768tz918zuv">Thai Pop Hits Radio</option>
+              <option value="http://radio11.plathong.net:7068/">FM 106 วิทยุครอบครัวข่าว (เพลง & สาระ)</option>
+              <option value="http://radio.prd.go.th/fm925/live.mp3">วิทยุแห่งประเทศไทย สวท. FM 92.5</option>
             </optgroup>
-            <optgroup label="🌾 ลูกทุ่ง / เพื่อชีวิต">
-              <option value="https://stream.zeno.fm/4wy075u3a0hvv">เพลงลูกทุ่ง & หมอลำ เรดิโอ</option>
-              <option value="https://stream.zeno.fm/k2k5uuv3a0hvv">เพลงเพื่อชีวิต อมตะ</option>
+            <optgroup label="🌾 ลูกทุ่ง / เพื่อชีวิต / หมอลำ">
+              <option value="http://radio12.plathong.net:7086/">ลูกทุ่งมหานคร LTMFM 95 (อสมท.)</option>
+              <option value="http://radio11.plathong.net:7114/">ลูกทุ่งหมอลำ & อีสานเรดิโอ</option>
+              <option value="http://radio10.plathong.net:7020/">เพลงเพื่อชีวิตอมตะ เรดิโอ</option>
             </optgroup>
-            <optgroup label="📻 ข่าวสาร / ทอล์กโชว์">
-              <option value="https://stream.zeno.fm/f38y8b93a0hvv">Thai News & Variety Talk</option>
+            <optgroup label="📻 จราจร / ข่าวสาร">
+              <option value="http://fm91bkk.com:8000/live">FM 91 สวพ. (รายงานจราจร & ข่าวสด)</option>
             </optgroup>
           </select>
           <audio id="backup-audio-player" controls style="width: 100%; height: 28px; margin-top: 6px;"></audio>
@@ -87,7 +88,7 @@
             <button id="btn-open-register-modal" class="y2k-btn request-btn">📝 สมัครดีเจ</button>
           </div>
 
-          <!-- หน้าสถานะของดีเจที่ล็อกอินแล้ว และต้องการกดขอจัดรายการ -->
+          <!-- หน้าสถานะดีเจรอขอจัดรายการ -->
           <div id="dj-portal-section" class="hide" style="text-align: center; padding: 10px; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 4px; margin-bottom: 6px;">
             <div style="font-weight: bold; color: #0369a1;">👋 ยินดีต้อนรับ: <span id="dj-portal-name">DJ</span></div>
             <p style="font-size: 11px; color: #0284c7; margin: 4px 0 8px;">เมื่อพร้อมเปิดเพลง ให้กดปุ่มเพื่อส่งคำขอถึงแอดมิน</p>
@@ -98,14 +99,14 @@
             <button id="btn-dj-portal-logout" class="y2k-btn logout-btn" style="margin-top: 6px;">🚪 ออกจากระบบ</button>
           </div>
 
-          <!-- แผงจัดรายการเมื่อได้รับการอนุมัติ หรือเป็น Super Admin -->
+          <!-- แผงจัดรายการ Super Admin / DJ -->
           <div id="dj-controls-section" class="dj-controls hide">
             <div class="dj-header-bar">
               <span id="role-badge" class="dj-badge-status">🎧 สิทธิ์: กำลังโหลด</span>
               <button type="button" id="btn-dj-logout" class="y2k-btn logout-btn">🚪 ออกจากระบบ</button>
             </div>
 
-            <!-- กล่อง Super Admin 1: คิวดีเจรออนุมัติ -->
+            <!-- คิวดีเจรออนุมัติ -->
             <div id="admin-approval-panel" class="admin-panel hide">
               <div class="sfx-title">👑 คิวดีเจที่รออนุมัติ <span>(<span id="dj-queue-count">0</span>)</span></div>
               <ul id="dj-approval-list" class="requests-list">
@@ -113,7 +114,7 @@
               </ul>
             </div>
 
-            <!-- กล่อง Super Admin 2: จัดการบัญชีดีเจที่ลงทะเบียน -->
+            <!-- รายชื่อดีเจที่ลงทะเบียนไว้ -->
             <div id="admin-registered-djs-box" class="admin-panel hide" style="margin-top: 6px;">
               <div class="sfx-title">📋 ดีเจที่ลงทะเบียนไว้ <span>(<span id="reg-dj-count">0</span>)</span></div>
               <ul id="registered-djs-list" class="requests-list">
@@ -339,6 +340,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=16"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>

@@ -373,7 +373,6 @@ body {
   margin-top: 6px;
 }
 
-/* จัดกึ่งกลางตัวเลขในวงเล็บให้ตรงบรรทัด ไม่ลอย */
 .sfx-title {
   font-weight: bold;
   font-size: 11px;
@@ -692,7 +691,7 @@ body {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px; }
 .error-msg { color: #cc0000; font-size: 11px; font-weight: bold; }
 
-/* จัดการความกว้างและป้องกันปุ่มล้นขอบใน sidebar */
+/* จัดการความกว้างและป้องกันปุ่มล้นขอบ */
 .side-bar .input-row {
   display: flex !important;
   gap: 4px !important;
