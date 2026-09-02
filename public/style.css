@@ -135,7 +135,7 @@ body {
 
 .playlist-section {
   flex: 1;
-  min-height: 120px;
+  min-height: 110px;
   overflow-y: auto;
 }
 
@@ -157,7 +157,7 @@ body {
   flex: 1;
 }
 
-/* แถบหัวข้อประจำวัน โดดเด่น สไตล์ Y2K Gradient */
+/* แถบหัวข้อประจำวัน */
 .topic-banner {
   background: linear-gradient(90deg, #fff3cd 0%, #ffeaa7 100%);
   border-bottom: 2px solid #ffd166;
@@ -204,6 +204,65 @@ body {
   font-weight: bold;
   color: #2b570d;
   margin-bottom: 4px;
+}
+
+/* 🎚️ กล่อง DJ Mixer */
+.mixer-box {
+  background: #ebf5e4;
+  border: 1px solid #9dc785;
+  border-radius: 5px;
+  padding: 8px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mixer-title {
+  font-weight: bold;
+  font-size: 11px;
+  color: #27520b;
+  border-bottom: 1px dotted #9dc785;
+  padding-bottom: 2px;
+}
+
+.slider-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #333;
+}
+
+.vol-badge {
+  font-weight: bold;
+  color: #1a5205;
+}
+
+.y2k-range {
+  width: 100%;
+  accent-color: #559e24;
+  cursor: pointer;
+  height: 5px;
+}
+
+.ducking-btn {
+  font-size: 11px !important;
+  padding: 4px !important;
+  background: linear-gradient(180deg, #fff2cc 0%, #ffd966 100%) !important;
+  color: #664d00 !important;
+  border: 1px solid #cca300 !important;
+}
+
+.ducking-btn.active {
+  background: linear-gradient(180deg, #ffd966 0%, #e6ac00 100%) !important;
+  color: #000 !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2) !important;
 }
 
 .chat-tab-bar {

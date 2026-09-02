@@ -73,11 +73,35 @@
               <button id="btn-show-toggle" class="y2k-btn on-air-btn">🔴 เริ่มจัดรายการ (Go Live)</button>
             </div>
 
+            <!-- เครื่องมือและมิกเซอร์ของดีเจ -->
             <div id="dj-broadcast-tools" class="broadcast-tools hide">
               <input type="file" id="dj-file-input" accept="audio/*" multiple>
               <div class="btn-group">
                 <button id="btn-mic" class="y2k-btn">🎙️ เปิดไมค์</button>
                 <button id="btn-play-music" class="y2k-btn">🎵 เปิดเพลงถัดไป</button>
+              </div>
+
+              <!-- 🎚️ กล่อง Mixer ปรับระดับเสียง -->
+              <div class="mixer-box">
+                <div class="mixer-title">🎚️ DJ Audio Mixer</div>
+                
+                <div class="slider-item">
+                  <div class="slider-header">
+                    <span>🎵 เสียงเพลง (Music)</span>
+                    <span id="label-music-vol" class="vol-badge">80%</span>
+                  </div>
+                  <input type="range" id="slider-music-vol" class="y2k-range" min="0" max="100" value="80">
+                </div>
+
+                <div class="slider-item">
+                  <div class="slider-header">
+                    <span>🎙️ เสียงไมค์ (Mic)</span>
+                    <span id="label-mic-vol" class="vol-badge">100%</span>
+                  </div>
+                  <input type="range" id="slider-mic-vol" class="y2k-range" min="0" max="150" value="100">
+                </div>
+
+                <button type="button" id="btn-ducking" class="y2k-btn ducking-btn">🔉 หรี่เพลงพูดไมค์ (Ducking)</button>
               </div>
             </div>
           </div>
@@ -92,7 +116,7 @@
         <span class="title">Live Chat & Shoutbox</span>
       </div>
 
-      <!-- ป้ายหัวข้อใหญ่ประจำวัน (Topic of the Day Banner) -->
+      <!-- ป้ายหัวข้อใหญ่ประจำวัน -->
       <div class="topic-banner">
         <div class="topic-tag">🌟 TOPIC TODAY</div>
         <div id="display-topic" class="topic-text">กำลังโหลดหัวข้อ...</div>
@@ -156,6 +180,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

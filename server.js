@@ -16,10 +16,13 @@ const DJ_SECRET_KEY = "1234";
 let isDJLive = false;
 let activeDJSockets = new Set();
 let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline" };
-let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨"; // หัวข้อเริ่มต้น
+let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨";
 let playlist = [];
 let chatHistory = [];
 let currentDay = new Date().toLocaleDateString('th-TH');
+
+// บันทึกระดับเสียงเริ่มต้น
+let currentVolumes = { music: 0.8, mic: 1.0 };
 
 function checkDayReset() {
   const today = new Date().toLocaleDateString('th-TH');
@@ -38,6 +41,7 @@ io.on('connection', (socket) => {
   socket.emit('dj-status-update', isDJLive);
   socket.emit('track-update', currentTrack);
   socket.emit('topic-update', todayTopic);
+  socket.emit('volume-update', currentVolumes);
   socket.emit('playlist-update', playlist);
   socket.emit('chat-history', chatHistory);
 
@@ -58,17 +62,24 @@ io.on('connection', (socket) => {
     if (key === DJ_SECRET_KEY) {
       socket.isDJ = true;
       activeDJSockets.add(socket.id);
-      callback({ success: true, isLive: isDJLive });
+      callback({ success: true, isLive: isDJLive, volumes: currentVolumes });
     } else {
       callback({ success: false, message: "รหัสผ่านดีเจไม่ถูกต้อง!" });
     }
   });
 
-  // อัปเดตหัวข้อประจำวัน (เฉพาะดีเจ)
   socket.on('dj-set-topic', (newTopic) => {
     if (!socket.isDJ) return;
     todayTopic = newTopic.trim() || "เปิดเพลงสบายๆ สไตล์ Y2K";
     io.emit('topic-update', todayTopic);
+  });
+
+  // ปรับระดับเสียงจากดีเจแบบ Real-time
+  socket.on('dj-volume-change', (data) => {
+    if (!socket.isDJ) return;
+    if (data.type === 'music') currentVolumes.music = data.volume;
+    if (data.type === 'mic') currentVolumes.mic = data.volume;
+    io.emit('volume-update', currentVolumes);
   });
 
   socket.on('dj-start-show', () => {
@@ -97,9 +108,10 @@ io.on('connection', (socket) => {
     io.emit('playlist-update', playlist);
   });
 
-  socket.on('dj-audio-stream', (audioChunk) => {
+  // ส่งสัญญาณเสียง (รองรับทั้งเพลงและไมค์)
+  socket.on('dj-audio-stream', (data) => {
     if (!socket.isDJ || !isDJLive) return;
-    socket.broadcast.emit('listener-audio-stream', audioChunk);
+    socket.broadcast.emit('listener-audio-stream', data);
   });
 
   socket.on('disconnect', () => {

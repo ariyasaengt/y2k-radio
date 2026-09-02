@@ -28,6 +28,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const djTopicInput = document.getElementById('dj-topic-input');
   const btnSaveTopic = document.getElementById('btn-save-topic');
 
+  // Mixer Sliders
+  const sliderMusicVol = document.getElementById('slider-music-vol');
+  const sliderMicVol = document.getElementById('slider-mic-vol');
+  const labelMusicVol = document.getElementById('label-music-vol');
+  const labelMicVol = document.getElementById('label-mic-vol');
+  const btnDucking = document.getElementById('btn-ducking');
+
   // Modal
   const djModal = document.getElementById('dj-modal');
   const modalPassInput = document.getElementById('modal-pass-input');
@@ -45,6 +52,88 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentStyle = { bold: false, italic: false, underline: false, color: '#000000' };
   let isShowLive = false;
+  let isDucking = false;
+  let previousMusicVol = 80;
+
+  // --- AudioContext & GainNodes สำหรับแยกปรับเสียงเพลงและไมค์ ---
+  let listenAudioCtx = null;
+  let musicGainNode = null;
+  let micGainNode = null;
+  let currentMusicSource = null;
+
+  function initAudioContext() {
+    if (!listenAudioCtx) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      listenAudioCtx = new AudioContext();
+
+      // แยก Gain Node สำหรับเสียงเพลง
+      musicGainNode = listenAudioCtx.createGain();
+      musicGainNode.gain.value = 0.8;
+      musicGainNode.connect(listenAudioCtx.destination);
+
+      // แยก Gain Node สำหรับเสียงไมค์
+      micGainNode = listenAudioCtx.createGain();
+      micGainNode.gain.value = 1.0;
+      micGainNode.connect(listenAudioCtx.destination);
+    }
+  }
+
+  // รับระดับเสียงที่อัปเดตจากดีเจ
+  socket.on('volume-update', (vols) => {
+    if (listenAudioCtx) {
+      if (musicGainNode && vols.music !== undefined) {
+        musicGainNode.gain.setValueAtTime(vols.music, listenAudioCtx.currentTime);
+      }
+      if (micGainNode && vols.mic !== undefined) {
+        micGainNode.gain.setValueAtTime(vols.mic, listenAudioCtx.currentTime);
+      }
+    }
+  });
+
+  // สไลเดอร์ปรับเสียงเพลง
+  sliderMusicVol.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value);
+    labelMusicVol.textContent = `${val}%`;
+    const floatVal = val / 100;
+    socket.emit('dj-volume-change', { type: 'music', volume: floatVal });
+    if (listenAudioCtx && musicGainNode) {
+      musicGainNode.gain.setValueAtTime(floatVal, listenAudioCtx.currentTime);
+    }
+  });
+
+  // สไลเดอร์ปรับเสียงไมค์
+  sliderMicVol.addEventListener('input', (e) => {
+    const val = parseInt(e.target.value);
+    labelMicVol.textContent = `${val}%`;
+    const floatVal = val / 100;
+    socket.emit('dj-volume-change', { type: 'mic', volume: floatVal });
+    if (listenAudioCtx && micGainNode) {
+      micGainNode.gain.setValueAtTime(floatVal, listenAudioCtx.currentTime);
+    }
+  });
+
+  // ปุ่ม Ducking (หรี่เพลงด่วนเหลือ 20% เพื่อพูดไมค์)
+  btnDucking.addEventListener('click', () => {
+    if (!isDucking) {
+      previousMusicVol = parseInt(sliderMusicVol.value);
+      sliderMusicVol.value = 20;
+      labelMusicVol.textContent = "20%";
+      socket.emit('dj-volume-change', { type: 'music', volume: 0.2 });
+      if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(0.2, listenAudioCtx.currentTime);
+      btnDucking.classList.add('active');
+      btnDucking.textContent = "🔊 คืนระดับเสียงเพลงเดิม";
+      isDucking = true;
+    } else {
+      sliderMusicVol.value = previousMusicVol;
+      labelMusicVol.textContent = `${previousMusicVol}%`;
+      const floatVal = previousMusicVol / 100;
+      socket.emit('dj-volume-change', { type: 'music', volume: floatVal });
+      if (listenAudioCtx && musicGainNode) musicGainNode.gain.setValueAtTime(floatVal, listenAudioCtx.currentTime);
+      btnDucking.classList.remove('active');
+      btnDucking.textContent = "🔉 หรี่เพลงพูดไมค์ (Ducking)";
+      isDucking = false;
+    }
+  });
 
   // --- อัปเดตหัวข้อประจำวัน ---
   socket.on('topic-update', (topic) => {
@@ -57,17 +146,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!newTopic) return;
       socket.emit('dj-set-topic', newTopic);
       djTopicInput.value = '';
-    });
-  }
-
-  if (djTopicInput) {
-    djTopicInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        const newTopic = djTopicInput.value.trim();
-        if (!newTopic) return;
-        socket.emit('dj-set-topic', newTopic);
-        djTopicInput.value = '';
-      }
     });
   }
 
@@ -239,7 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Formatting Toolbar
+  // Toolbar Formatting
   btnBold.onclick = () => {
     currentStyle.bold = !currentStyle.bold;
     btnBold.classList.toggle('active', currentStyle.bold);
@@ -278,31 +356,43 @@ document.addEventListener('DOMContentLoaded', () => {
     chatInput.style.color = currentStyle.color;
   };
 
-  // Main Audio
-  let listenAudioCtx = null;
+  // --- Main Audio Player ---
   let isBroadcastingMic = false;
   let mediaRecorder = null;
   let playlist = [];
 
   btnListen.onclick = async () => {
-    if (!listenAudioCtx) {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      listenAudioCtx = new AudioContext();
-      await listenAudioCtx.resume();
-      btnListen.textContent = "🔊 กำลังรับฟังสด";
-      btnListen.style.filter = "hue-rotate(90deg)";
-    } else if (listenAudioCtx.state === 'suspended') {
+    initAudioContext();
+    if (listenAudioCtx.state === 'suspended') {
       await listenAudioCtx.resume();
     }
+    btnListen.textContent = "🔊 กำลังรับฟังสด";
+    btnListen.style.filter = "hue-rotate(90deg)";
   };
 
-  socket.on('listener-audio-stream', async (arrayBuffer) => {
-    if (!listenAudioCtx) return;
+  // รับสัญญาณเสียง (แยกสายเสียงระหว่างเพลงและไมค์เข้า GainNode ของแต่ละอัน)
+  socket.on('listener-audio-stream', async (data) => {
+    initAudioContext();
+    if (listenAudioCtx.state === 'suspended') await listenAudioCtx.resume();
+
     try {
-      const audioBuffer = await listenAudioCtx.decodeAudioData(arrayBuffer.slice(0));
+      // ตรวจสอบว่าส่งมาเป็น Object แยกประเภทหรือ ArrayBuffer ตรงๆ
+      const isObject = data && data.buffer;
+      const bufferData = isObject ? data.buffer : data;
+      const streamType = isObject ? data.type : 'mic';
+
+      const audioBuffer = await listenAudioCtx.decodeAudioData(bufferData.slice(0));
       const source = listenAudioCtx.createBufferSource();
       source.buffer = audioBuffer;
-      source.connect(listenAudioCtx.destination);
+
+      if (streamType === 'music') {
+        if (currentMusicSource) currentMusicSource.stop();
+        currentMusicSource = source;
+        source.connect(musicGainNode);
+      } else {
+        source.connect(micGainNode);
+      }
+
       source.start();
     } catch (err) {
       console.error(err);
@@ -338,7 +428,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const file = playlist.shift();
     socket.emit('dj-update-track', { track: { title: file.name, artist: "DJ On Air" } });
     const arrayBuffer = await file.arrayBuffer();
-    socket.emit('dj-audio-stream', arrayBuffer);
+    
+    // ส่งระบุ type: 'music' เพื่อให้เข้าช่อง musicGainNode
+    socket.emit('dj-audio-stream', { type: 'music', buffer: arrayBuffer });
   };
 
   btnMic.onclick = async () => {
@@ -347,7 +439,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaRecorder = new MediaRecorder(stream);
         mediaRecorder.ondataavailable = async (e) => {
-          if (e.data.size > 0) socket.emit('dj-audio-stream', await e.data.arrayBuffer());
+          if (e.data.size > 0) {
+            const chunk = await e.data.arrayBuffer();
+            // ส่งระบุ type: 'mic' เพื่อให้เข้าช่อง micGainNode
+            socket.emit('dj-audio-stream', { type: 'mic', buffer: chunk });
+          }
         };
         mediaRecorder.start(400);
         btnMic.textContent = "🛑 ปิดไมค์";
