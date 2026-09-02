@@ -112,28 +112,28 @@ document.addEventListener('DOMContentLoaded', () => {
   let previousMusicVol = 80;
 
   // ========================================================
-  // 📻 Thai Radio Streams (เชื่อมต่อผ่าน Audio Proxy หลังบ้าน)
+  // 📻 Thai Radio Streams (Direct ผ่าน Proxy หลังบ้าน)
   // ========================================================
   if (backupStationSelect) {
     backupStationSelect.addEventListener('change', (e) => {
-      const rawStreamUrl = e.target.value;
-      if (!rawStreamUrl) {
+      const rawUrl = e.target.value;
+      if (!rawUrl) {
         backupAudioPlayer.pause();
         backupAudioPlayer.removeAttribute('src');
         backupAudioPlayer.load();
         return;
       }
 
-      // วิ่งผ่าน Proxy แก้ไข Mixed Content และ SSL Block
-      const proxiedUrl = `/api/radio-stream?url=${encodeURIComponent(rawStreamUrl)}`;
+      // วิ่งผ่าน Audio Proxy เพื่อแปลง Response Header เป็น HTTP และข้าม CORS/SSL
+      const proxyUrl = `/api/radio-stream?url=${encodeURIComponent(rawUrl)}`;
       backupAudioPlayer.pause();
-      backupAudioPlayer.src = proxiedUrl;
+      backupAudioPlayer.src = proxyUrl;
       backupAudioPlayer.load();
 
       const playPromise = backupAudioPlayer.play();
       if (playPromise !== undefined) {
         playPromise.catch((err) => {
-          console.warn("Autoplay blocked or connecting:", err);
+          console.warn("Audio autoplay blocked or stream buffering:", err);
         });
       }
     });
@@ -148,23 +148,18 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   btnOpenRegisterModal.onclick = () => {
-    regUserInput.value = '';
-    regPassInput.value = '';
-    regError.classList.add('hide');
-    registerModal.classList.remove('hide');
-    regUserInput.focus();
+    regUserInput.value = ''; regPassInput.value = ''; regError.classList.add('hide');
+    registerModal.classList.remove('hide'); regUserInput.focus();
   };
   regBtnCancel.onclick = () => registerModal.classList.add('hide');
 
   regBtnConfirm.onclick = () => {
-    const username = regUserInput.value.trim();
-    const password = regPassInput.value.trim();
+    const username = regUserInput.value.trim(), password = regPassInput.value.trim();
     if (!username || !password) {
       regError.textContent = "กรุณากรอกชื่อและรหัสผ่านให้ครบถ้วน";
       regError.classList.remove('hide');
       return;
     }
-
     socket.emit('dj-register', { username, password }, (res) => {
       if (res.success) {
         alert(res.message);
@@ -180,11 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   btnOpenLoginModal.onclick = () => {
-    loginUserInput.value = '';
-    loginPassInput.value = '';
-    loginError.classList.add('hide');
-    loginModal.classList.remove('hide');
-    loginUserInput.focus();
+    loginUserInput.value = ''; loginPassInput.value = ''; loginError.classList.add('hide');
+    loginModal.classList.remove('hide'); loginUserInput.focus();
   };
   loginBtnCancel.onclick = () => loginModal.classList.add('hide');
 
@@ -192,8 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loginPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeLogin(); });
 
   function executeLogin() {
-    const username = loginUserInput.value.trim();
-    const password = loginPassInput.value.trim();
+    const username = loginUserInput.value.trim(), password = loginPassInput.value.trim();
     if (!password) {
       loginError.textContent = "กรุณากรอกรหัสผ่าน!";
       loginError.classList.remove('hide');
@@ -298,12 +289,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (myRole !== 'admin' || !registeredDjsList) return;
     regDjCount.textContent = djList.length;
     registeredDjsList.innerHTML = '';
-    
     if (djList.length === 0) {
       registeredDjsList.innerHTML = '<li>ยังไม่มีดีเจลงทะเบียน</li>';
       return;
     }
-
     djList.forEach(name => {
       const li = document.createElement('li');
       li.innerHTML = `
@@ -312,7 +301,6 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       registeredDjsList.appendChild(li);
     });
-
     registeredDjsList.querySelectorAll('.del-dj-btn').forEach(btn => {
       btn.onclick = () => {
         const target = btn.getAttribute('data-name');
@@ -567,7 +555,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e){}
   });
 
-  // Song Requests
   btnOpenRequestModal.onclick = () => { reqSongInput.value = ''; reqNoteInput.value = ''; requestModal.classList.remove('hide'); reqSongInput.focus(); };
   reqBtnCancel.onclick = () => requestModal.classList.add('hide');
   reqBtnSubmit.onclick = () => {
@@ -590,7 +577,6 @@ document.addEventListener('DOMContentLoaded', () => {
     requestsList.querySelectorAll('.accept-req-btn').forEach(b => b.onclick = () => socket.emit('dj-accept-request', parseInt(b.getAttribute('data-id'))));
   });
 
-  // Pin & Clear Chat
   btnPinMsg.onclick = () => { const t = djPinInput.value.trim(); if (t) { socket.emit('dj-pin-message', t); djPinInput.value = ''; } };
   btnUnpinMsg.onclick = () => socket.emit('dj-pin-message', '');
   btnClearChat.onclick = () => { if (confirm("ต้องการล้างประวัติแชททั้งหมดใช่หรือไม่?")) socket.emit('dj-clear-chat'); };

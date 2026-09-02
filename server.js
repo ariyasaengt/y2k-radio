@@ -1,6 +1,8 @@
 const express = require('express');
 const http = require('http');
 const https = require('https');
+const net = require('net');
+const tls = require('tls');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
@@ -12,44 +14,71 @@ const io = new Server(server, { maxHttpBufferSize: 1e7 });
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ========================================================
-// 📻 Audio Stream Proxy (แก้ปัญหา Mixed Content & SSL มาร์กเกอร์)
+// 📻 Bulletproof Audio Proxy (แก้ปัญหา ICY 200 OK & Mixed Content)
 // ========================================================
 app.get('/api/radio-stream', (req, res) => {
   const targetUrl = req.query.url;
-  if (!targetUrl) return res.status(400).send("No stream URL specified");
+  if (!targetUrl) return res.status(400).send("No stream URL");
 
   try {
-    const parsedUrl = new URL(targetUrl);
-    const client = parsedUrl.protocol === 'https:' ? https : http;
+    const parsed = new URL(targetUrl);
+    const isHttps = parsed.protocol === 'https:';
+    const port = parsed.port || (isHttps ? 443 : 80);
+    const host = parsed.hostname;
+    const requestPath = (parsed.pathname || '/') + (parsed.search || '');
 
-    const requestOptions = {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)',
-        'Icy-MetaData': '0'
-      },
-      rejectUnauthorized: false // ข้ามปัญหา SSL ใบรับรองไม่ตรงของคลื่นวิทยุ
-    };
-
-    const proxyReq = client.get(targetUrl, requestOptions, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, {
-        'Content-Type': proxyRes.headers['content-type'] || 'audio/mpeg',
-        'Cache-Control': 'no-cache, no-store',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*'
-      });
-      proxyRes.pipe(res);
+    const connector = isHttps ? tls : net;
+    const client = connector.connect({
+      host: host,
+      port: Number(port),
+      servername: isHttps ? host : undefined,
+      rejectUnauthorized: false
+    }, () => {
+      // ส่งคำขอแบบดั้งเดิมที่ Icecast/Shoutcast ตอบรับแน่นอน
+      const httpRequest = 
+        `GET ${requestPath} HTTP/1.0\r\n` +
+        `Host: ${host}\r\n` +
+        `User-Agent: WinampMPEG/5.09\r\n` +
+        `Accept: */*\r\n` +
+        `Icy-MetaData: 0\r\n` +
+        `Connection: close\r\n\r\n`;
+      client.write(httpRequest);
     });
 
-    proxyReq.on('error', (err) => {
-      console.error("Radio proxy error:", err.message);
-      if (!res.headersSent) res.status(502).send("Cannot connect to radio stream");
+    let headerParsed = false;
+    let buffer = Buffer.alloc(0);
+
+    client.on('data', (chunk) => {
+      if (!headerParsed) {
+        buffer = Buffer.concat([buffer, chunk]);
+        const headerEnd = buffer.indexOf('\r\n\r\n');
+        if (headerEnd !== -1) {
+          headerParsed = true;
+          // ตอบกลับเบราว์เซอร์ด้วย HTTP 200 มาตรฐานที่เล่นเสียงได้แน่นอน
+          res.writeHead(200, {
+            'Content-Type': 'audio/mpeg',
+            'Cache-Control': 'no-cache, no-store',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
+          });
+          const bodyData = buffer.slice(headerEnd + 4);
+          if (bodyData.length > 0) res.write(bodyData);
+        }
+      } else {
+        res.write(chunk);
+      }
+    });
+
+    client.on('error', (err) => {
+      console.error("Radio Stream Error:", err.message);
+      if (!res.headersSent) res.status(502).send("Radio Offline");
     });
 
     req.on('close', () => {
-      proxyReq.destroy();
+      client.destroy();
     });
-  } catch (e) {
-    res.status(500).send("Invalid stream URL");
+  } catch (err) {
+    res.status(500).send("Invalid URL");
   }
 });
 
@@ -77,21 +106,13 @@ let registeredDJs = {};
 
 function loadRegisteredDJs() {
   try {
-    if (fs.existsSync(DJS_FILE)) {
-      registeredDJs = JSON.parse(fs.readFileSync(DJS_FILE, 'utf-8'));
-    } else {
-      registeredDJs = {};
-      saveRegisteredDJs();
-    }
-  } catch (err) {
-    registeredDJs = {};
-  }
+    if (fs.existsSync(DJS_FILE)) registeredDJs = JSON.parse(fs.readFileSync(DJS_FILE, 'utf-8'));
+    else { registeredDJs = {}; saveRegisteredDJs(); }
+  } catch (err) { registeredDJs = {}; }
 }
 
 function saveRegisteredDJs() {
-  try {
-    fs.writeFileSync(DJS_FILE, JSON.stringify(registeredDJs, null, 2), 'utf-8');
-  } catch (err) {}
+  try { fs.writeFileSync(DJS_FILE, JSON.stringify(registeredDJs, null, 2), 'utf-8'); } catch (err) {}
 }
 loadRegisteredDJs();
 
@@ -112,9 +133,7 @@ function loadChatHistory() {
 }
 
 function saveChatHistory() {
-  try {
-    fs.writeFileSync(CHAT_FILE, JSON.stringify({ savedDay: currentDay, history: chatHistory }, null, 2), 'utf-8');
-  } catch (err) {}
+  try { fs.writeFileSync(CHAT_FILE, JSON.stringify({ savedDay: currentDay, history: chatHistory }, null, 2), 'utf-8'); } catch (err) {}
 }
 loadChatHistory();
 
@@ -164,20 +183,14 @@ io.on('connection', (socket) => {
     const cleanUser = (data.username || '').trim();
     const cleanPass = (data.password || '').trim();
 
-    if (!cleanUser || !cleanPass) {
-      return callback({ success: false, message: "กรุณากรอกชื่อจัดรายการและรหัสผ่านให้ครบถ้วน!" });
-    }
-    if (cleanUser.toLowerCase() === 'admin' || cleanPass === ADMIN_SECRET_KEY) {
-      return callback({ success: false, message: "ชื่อหรือรหัสนี้สงวนไว้สำหรับแอดมิน!" });
-    }
-    if (registeredDJs[cleanUser]) {
-      return callback({ success: false, message: "ชื่อจัดรายการนี้มีผู้ใช้งานแล้ว กรุณาใช้ชื่ออื่น!" });
-    }
+    if (!cleanUser || !cleanPass) return callback({ success: false, message: "กรุณากรอกชื่อและรหัสผ่าน!" });
+    if (cleanUser.toLowerCase() === 'admin' || cleanPass === ADMIN_SECRET_KEY) return callback({ success: false, message: "ชื่อนี้สงวนไว้สำหรับแอดมิน!" });
+    if (registeredDJs[cleanUser]) return callback({ success: false, message: "ชื่อจัดรายการนี้มีผู้ใช้งานแล้ว!" });
 
     registeredDJs[cleanUser] = cleanPass;
     saveRegisteredDJs();
     if (adminSocketId) io.to(adminSocketId).emit('admin-registered-djs-update', Object.keys(registeredDJs));
-    callback({ success: true, message: "สมัครบัญชีดีเจสำเร็จ! เข้าสู่ระบบเพื่อขอจัดรายการได้เลย" });
+    callback({ success: true, message: "สมัครบัญชีดีเจสำเร็จ!" });
   });
 
   socket.on('auth-login', (data, callback) => {
@@ -214,11 +227,7 @@ io.on('connection', (socket) => {
   socket.on('dj-request-queue', () => {
     if (socket.userRole !== 'dj_member') return;
     if (!djQueue.some(q => q.socketId === socket.id)) {
-      djQueue.push({
-        socketId: socket.id,
-        username: socket.djName,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
+      djQueue.push({ socketId: socket.id, username: socket.djName, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
     }
     socket.emit('dj-queue-waiting');
     if (adminSocketId) io.to(adminSocketId).emit('admin-dj-queue-update', djQueue);
