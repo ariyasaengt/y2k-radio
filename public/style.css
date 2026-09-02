@@ -694,3 +694,20 @@ body {
   #username, #userstatus { width: 100% !important; }
   #btn-send { width: 70px; }
 }
+
+/* บังคับให้ช่องกรอกและปุ่มในกล่อง moderation ยุบตัวพอดีกับความกว้าง */
+.moderation-box .input-row {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+
+.moderation-box .input-row input {
+  min-width: 0 !important; /* ป้องกันช่องพิมพ์ดันปุ่มหลุดขอบ */
+}
+
+.moderation-box .input-row .y2k-btn {
+  padding: 4px 6px !important;
+  white-space: nowrap;
+  flex-shrink: 0; /* ป้องกันปุ่มเบี้ยว */
+}

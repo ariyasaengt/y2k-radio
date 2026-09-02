@@ -1,7 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   const socket = io();
 
-  let myRole = 'listener'; // 'admin' | 'dj' | 'dj_pending' | 'listener'
+  let myRole = 'listener'; // 'admin' | 'dj' | 'dj_member' | 'listener'
+  let myDJName = '';
 
   const mainAppWindow = document.getElementById('main-app-window');
   const stationStatus = document.getElementById('station-status');
@@ -27,12 +28,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const backupAudioPlayer = document.getElementById('backup-audio-player');
   let currentHls = null;
 
-  // ควบคุมสิทธิ์
-  const btnDjLogin = document.getElementById('btn-dj-login');
-  const btnDjLogout = document.getElementById('btn-dj-logout');
+  // ส่วนควบคุมสิทธิ์ และ Portal ดีเจ
+  const btnOpenLoginModal = document.getElementById('btn-open-login-modal');
+  const btnOpenRegisterModal = document.getElementById('btn-open-register-modal');
   const djLoginSection = document.getElementById('dj-login-section');
-  const djPendingSection = document.getElementById('dj-pending-section');
+  const djPortalSection = document.getElementById('dj-portal-section');
+  const djPortalName = document.getElementById('dj-portal-name');
+  const btnRequestToLive = document.getElementById('btn-request-to-live');
+  const djPortalWaitingText = document.getElementById('dj-portal-waiting-text');
+  const btnDjPortalLogout = document.getElementById('btn-dj-portal-logout');
+
   const djControlsSection = document.getElementById('dj-controls-section');
+  const btnDjLogout = document.getElementById('btn-dj-logout');
   const roleBadge = document.getElementById('role-badge');
   const adminApprovalPanel = document.getElementById('admin-approval-panel');
   const djApprovalList = document.getElementById('dj-approval-list');
@@ -73,11 +80,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const labelMicVol = document.getElementById('label-mic-vol');
   const btnDucking = document.getElementById('btn-ducking');
 
-  const djModal = document.getElementById('dj-modal');
-  const modalPassInput = document.getElementById('modal-pass-input');
-  const modalBtnConfirm = document.getElementById('modal-btn-confirm');
-  const modalBtnCancel = document.getElementById('modal-btn-cancel');
-  const modalError = document.getElementById('modal-error');
+  // Modals
+  const loginModal = document.getElementById('login-modal');
+  const loginUserInput = document.getElementById('login-user-input');
+  const loginPassInput = document.getElementById('login-pass-input');
+  const loginBtnConfirm = document.getElementById('login-btn-confirm');
+  const loginBtnCancel = document.getElementById('login-btn-cancel');
+  const loginError = document.getElementById('login-error');
+
+  const registerModal = document.getElementById('register-modal');
+  const regUserInput = document.getElementById('reg-user-input');
+  const regPassInput = document.getElementById('reg-pass-input');
+  const regBtnConfirm = document.getElementById('reg-btn-confirm');
+  const regBtnCancel = document.getElementById('reg-btn-cancel');
+  const regError = document.getElementById('reg-error');
 
   const btnBold = document.getElementById('btn-bold');
   const btnItalic = document.getElementById('btn-italic');
@@ -92,59 +108,142 @@ document.addEventListener('DOMContentLoaded', () => {
   let previousMusicVol = 80;
 
   // ==========================================
-  // 🔐 ระบบยืนยันสิทธิ์ Admin / DJ / อนุมัติคิว
+  // 🔐 1. ระบบสมัครและล็อกอินดีเจ / แอดมิน
   // ==========================================
   if (usernameInput) {
     if (localStorage.getItem('saved_username')) usernameInput.value = localStorage.getItem('saved_username');
     usernameInput.addEventListener('input', () => localStorage.setItem('saved_username', usernameInput.value.trim()));
   }
 
-  const savedKey = localStorage.getItem('user_auth_key');
-  if (savedKey) verifyAuth(savedKey);
+  // เปิด Modal สมัคร
+  btnOpenRegisterModal.onclick = () => {
+    regUserInput.value = '';
+    regPassInput.value = '';
+    regError.classList.add('hide');
+    registerModal.classList.remove('hide');
+    regUserInput.focus();
+  };
+  regBtnCancel.onclick = () => registerModal.classList.add('hide');
 
-  btnDjLogin.onclick = () => {
-    modalPassInput.value = '';
-    if (modalError) modalError.classList.add('hide');
-    djModal.classList.remove('hide');
-    modalPassInput.focus();
+  // กดยืนยันสมัครดีเจ
+  regBtnConfirm.onclick = () => {
+    const username = regUserInput.value.trim();
+    const password = regPassInput.value.trim();
+    if (!username || !password) {
+      regError.textContent = "กรุณากรอกชื่อและรหัสผ่านให้ครบถ้วน";
+      regError.classList.remove('hide');
+      return;
+    }
+
+    socket.emit('dj-register', { username, password }, (res) => {
+      if (res.success) {
+        alert(res.message);
+        registerModal.classList.add('hide');
+        loginUserInput.value = username;
+        loginModal.classList.remove('hide');
+        loginPassInput.focus();
+      } else {
+        regError.textContent = res.message;
+        regError.classList.remove('hide');
+      }
+    });
   };
 
-  modalBtnCancel.onclick = () => djModal.classList.add('hide');
-  modalBtnConfirm.onclick = () => verifyAuth(modalPassInput.value.trim());
-  modalPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') verifyAuth(modalPassInput.value.trim()); });
+  // เปิด Modal ล็อกอิน
+  btnOpenLoginModal.onclick = () => {
+    loginUserInput.value = '';
+    loginPassInput.value = '';
+    loginError.classList.add('hide');
+    loginModal.classList.remove('hide');
+    loginUserInput.focus();
+  };
+  loginBtnCancel.onclick = () => loginModal.classList.add('hide');
 
-  function verifyAuth(pass) {
-    if (!pass) return;
-    const user = usernameInput.value.trim() || 'Guest';
-    socket.emit('auth-request', { key: pass, username: user }, (res) => {
+  // กดยืนยันล็อกอิน
+  loginBtnConfirm.onclick = () => executeLogin();
+  loginPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeLogin(); });
+
+  function executeLogin() {
+    const username = loginUserInput.value.trim();
+    const password = loginPassInput.value.trim();
+    if (!password) {
+      loginError.textContent = "กรุณากรอกรหัสผ่าน!";
+      loginError.classList.remove('hide');
+      return;
+    }
+
+    socket.emit('auth-login', { username, password }, (res) => {
       if (res.success) {
-        localStorage.setItem('user_auth_key', pass);
-        djModal.classList.add('hide');
+        loginModal.classList.add('hide');
         myRole = res.role;
+        myDJName = res.name;
+
+        // บันทึกความจำ
+        localStorage.setItem('auth_session', JSON.stringify({ user: username, pass: password }));
 
         if (res.role === 'admin') {
           djLoginSection.classList.add('hide');
-          djPendingSection.classList.add('hide');
+          djPortalSection.classList.add('hide');
           djControlsSection.classList.remove('hide');
           roleBadge.textContent = "👑 Super Admin";
           roleBadge.style.background = "#fee2e2";
           roleBadge.style.color = "#991b1b";
           roleBadge.style.borderColor = "#ef4444";
           adminApprovalPanel.classList.remove('hide');
-        } else if (res.role === 'dj_pending') {
+        } else if (res.role === 'dj_member') {
           djLoginSection.classList.add('hide');
-          djPendingSection.classList.remove('hide');
+          djPortalSection.classList.remove('hide');
+          djPortalName.textContent = res.name;
+          usernameInput.value = res.name;
         }
       } else {
-        if (modalError) {
-          modalError.textContent = res.message;
-          modalError.classList.remove('hide');
-        }
+        loginError.textContent = res.message;
+        loginError.classList.remove('hide');
       }
     });
   }
 
-  // แอดมินรับข้อมูลคิวดีเจที่รออนุมัติ
+  // โหลด Session เดิมหากเคยล็อกอินไว้
+  const savedSession = localStorage.getItem('auth_session');
+  if (savedSession) {
+    try {
+      const parsed = JSON.parse(savedSession);
+      socket.emit('auth-login', { username: parsed.user, password: parsed.pass }, (res) => {
+        if (res.success) {
+          myRole = res.role;
+          myDJName = res.name;
+          if (res.role === 'admin') {
+            djLoginSection.classList.add('hide');
+            djControlsSection.classList.remove('hide');
+            roleBadge.textContent = "👑 Super Admin";
+            roleBadge.style.background = "#fee2e2";
+            roleBadge.style.color = "#991b1b";
+            roleBadge.style.borderColor = "#ef4444";
+            adminApprovalPanel.classList.remove('hide');
+          } else if (res.role === 'dj_member') {
+            djLoginSection.classList.add('hide');
+            djPortalSection.classList.remove('hide');
+            djPortalName.textContent = res.name;
+            usernameInput.value = res.name;
+          }
+        } else {
+          localStorage.removeItem('auth_session');
+        }
+      });
+    } catch(e) {}
+  }
+
+  // ดีเจกดขอขึ้นจัดรายการสด
+  btnRequestToLive.onclick = () => {
+    socket.emit('dj-request-queue');
+  };
+
+  socket.on('dj-queue-waiting', () => {
+    btnRequestToLive.classList.add('hide');
+    djPortalWaitingText.classList.remove('hide');
+  });
+
+  // แอดมินรับข้อมูลคิวดีเจ
   socket.on('admin-dj-queue-update', (queue) => {
     if (myRole !== 'admin' || !djApprovalList) return;
     djQueueCount.textContent = queue.length;
@@ -174,36 +273,38 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ดีเจได้รับการอนุมัติจากแอดมิน
-  socket.on('dj-approved', () => {
+  socket.on('dj-approved', (djName) => {
     myRole = 'dj';
-    djPendingSection.classList.add('hide');
+    myDJName = djName;
+    djPortalSection.classList.add('hide');
     djControlsSection.classList.remove('hide');
-    roleBadge.textContent = "🎧 On-Air DJ";
+    roleBadge.textContent = `🎧 DJ ${djName}`;
     roleBadge.style.background = "#fef08a";
     roleBadge.style.color = "#713f12";
     roleBadge.style.borderColor = "#ca8a04";
     adminApprovalPanel.classList.add('hide');
-    alert("🎉 แอดมินอนุมัติให้คุณจัดรายการแล้ว!");
+    alert(`🎉 แอดมินอนุมัติให้คุณ ${djName} ขึ้นจัดรายการสดแล้ว!`);
   });
 
   socket.on('dj-rejected', () => {
-    myRole = 'listener';
-    localStorage.removeItem('user_auth_key');
-    djPendingSection.classList.add('hide');
-    djLoginSection.classList.remove('hide');
-    alert("❌ แอดมินปฏิเสธคำขอขึ้นจัดรายการ");
+    btnRequestToLive.classList.remove('hide');
+    djPortalWaitingText.classList.add('hide');
+    alert("❌ แอดมินปฏิเสธคำขอขึ้นจัดรายการในขณะนี้");
   });
 
-  btnDjLogout.addEventListener('click', () => {
+  function performLogout() {
     if (confirm("ต้องการออกจากระบบใช่หรือไม่?")) {
       if (isShowLive) socket.emit('dj-end-show');
-      localStorage.removeItem('user_auth_key');
+      localStorage.removeItem('auth_session');
       window.location.reload();
     }
-  });
+  }
+
+  btnDjLogout.onclick = performLogout;
+  btnDjPortalLogout.onclick = performLogout;
 
   // ==========================================
-  // 🎥 YouTube Background Player
+  // 🎥 2. YouTube Background Player
   // ==========================================
   let ytPlayer = null;
   let isYtReady = false;
@@ -272,7 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // 📻 Thai Radio Streams
+  // 📻 3. Thai Radio Streams
   // ==========================================
   if (backupStationSelect) {
     backupStationSelect.addEventListener('change', (e) => {
@@ -300,7 +401,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // ✨ Glitter Star Cursor
+  // ✨ 4. Glitter & Reactions & Nudge
   // ==========================================
   const glitterCanvas = document.getElementById('glitter-canvas');
   const gCtx = glitterCanvas.getContext('2d');
@@ -334,9 +435,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   animateGlitter();
 
-  // ==========================================
-  // 💖 Reactions & Nudge
-  // ==========================================
   btnHeartReaction.onclick = () => socket.emit('send-reaction', '❤️');
   socket.on('receive-reaction', (type) => {
     if (!heartContainer) return;
@@ -370,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==========================================
-  // 🔊 Web Audio & Winamp Visualizer
+  // 🔊 5. Web Audio & Visualizer & SFX
   // ==========================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
 
@@ -421,7 +519,6 @@ document.addEventListener('DOMContentLoaded', () => {
     render();
   }
 
-  // SFX
   sfxButtons.forEach(btn => btn.onclick = () => socket.emit('dj-play-sfx', btn.getAttribute('data-sound')));
   socket.on('play-sfx', (type) => {
     try {
@@ -552,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ==========================================
-  // 💬 แชทพร้อมป้ายยศแสดงตำแหน่ง
+  // 💬 6. แชทพร้อมป้ายยศแสดงตำแหน่ง
   // ==========================================
   let typingTimeout = null;
   chatInput.addEventListener('input', () => {
@@ -612,7 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
   chatColor.oninput = (e) => { currentStyle.color = e.target.value; chatInput.style.color = currentStyle.color; };
 
   // ==========================================
-  // ⏱️ Main Audio & Track Timer
+  // ⏱️ 7. Main Audio & Audio Streaming
   // ==========================================
   let isBroadcastingMic = false, mediaRecorder = null, playlist = [], trackTimerInterval = null;
   function formatTime(s) { return `${Math.floor(s/60).toString().padStart(2, '0')}:${Math.floor(s%60).toString().padStart(2, '0')}`; }
@@ -687,7 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
       socket.emit('dj-play-youtube', { videoId: item.videoId, title: item.name });
     } else {
       socket.emit('dj-stop-youtube');
-      socket.emit('dj-update-track', { track: { title: item.name, artist: myRole === 'admin' ? "Super Admin (MP3)" : "On-Air DJ (MP3)" } });
+      socket.emit('dj-update-track', { track: { title: item.name, artist: myRole === 'admin' ? "Super Admin (MP3)" : `DJ ${myDJName} (MP3)` } });
       const ab = await item.arrayBuffer();
       socket.emit('dj-audio-stream', { type: 'music', buffer: ab });
     }
