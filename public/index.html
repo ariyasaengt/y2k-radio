@@ -33,14 +33,29 @@
           <button id="btn-listen" class="y2k-btn primary-btn">▶ ฟังสถานีหลัก</button>
         </div>
 
+        <!-- กล่องคลื่นวิทยุไทย (รวมคลื่นฮิตแยกหมวดหมู่) -->
         <div class="section-box tuner-box">
-          <div class="section-title">Thai Radio Tuner (คลื่นไทย)</div>
+          <div class="section-title">Thai Radio Tuner (สถานีวิทยุไทย)</div>
           <select id="backup-station-select" class="y2k-select">
-            <option value="">-- เลือกคลื่นวิทยุไทย --</option>
-            <option value="https://media.onair.one:8170/media">PASSION FM 8170 (เพลงไทยสากล/ฮิต)</option>
-            <option value="https://media.onair.one:8170/ColorMusic">ColorMusic Thailand (เพลงไทยสบายๆ)</option>
-            <option value="https://media.onair.one:8170/DAB1">FUNG Live 8170 (เพลงไทยฟังสบาย)</option>
-            <option value="https://cdn-th2.login.in.th/shoutcast/8420">Radio Thailand (สถานีวิทยุแห่งประเทศไทย)</option>
+            <option value="">-- เลือกคลื่นวิทยุไทยยอดนิยม --</option>
+            
+            <optgroup label="🎵 เพลงสตริง / สากลฮิต">
+              <option value="https://media.onair.one:8170/media">PASSION FM 8170 (เพลงฮิตติดชาร์ต)</option>
+              <option value="https://media.onair.one:8170/ColorMusic">ColorMusic Thailand (เพลงไทยสบายๆ)</option>
+              <option value="https://media.onair.one:8170/DAB1">FUNG Live 8170 (ฟังสบายตลอดวัน)</option>
+              <option value="https://stream.zeno.fm/0r0xa792kwzuv">CityPop & 80s-90s Retro Hits</option>
+            </optgroup>
+
+            <optgroup label="🌾 ลูกทุ่ง / หมอลำ / เพื่อชีวิต">
+              <option value="https://media.onair.one:8170/Looktung">ลูกทุ่ง เอฟเอ็ม (เพลงลูกทุ่งยอดฮิต)</option>
+              <option value="https://media.onair.one:8170/Life">เพื่อชีวิต เรดิโอ (เพลงเพื่อชีวิตอมตะ)</option>
+              <option value="https://media.onair.one:8170/Isan">อีสานเรดิโอ (หมอลำ & เพลงลูกทุ่งอีสาน)</option>
+            </optgroup>
+
+            <optgroup label="📻 ข่าวสาร / จราจร / สาระ">
+              <option value="https://cdn-th2.login.in.th/shoutcast/8420">สถานีวิทยุกระจายเสียงแห่งประเทศไทย (สวท.)</option>
+              <option value="https://media.onair.one:8170/News">Thai News Talk (รายงานข่าว & สาระ)</option>
+            </optgroup>
           </select>
           <audio id="backup-audio-player" controls style="width: 100%; height: 28px; margin-top: 6px;"></audio>
         </div>
