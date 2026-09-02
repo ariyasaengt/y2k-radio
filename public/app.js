@@ -114,9 +114,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   function extractYouTubeID(url) {
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const regExp = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/;
     const match = url.match(regExp);
-    return (match && match[2].length === 11) ? match[2] : null;
+    return match ? match[1] : null;
   }
 
   function onPlayerStateChange(event) {
@@ -137,16 +137,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ดีเจกดเล่นเพลงผ่าน YouTube URL
+  // กดปุ่มเพิ่ม YouTube เข้าคิว Playlist
   if (btnPlayYt) {
-    btnPlayYt.addEventListener('click', () => {
+    btnPlayYt.addEventListener('click', async () => {
       const url = djYtUrl.value.trim();
       if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
+      
       const videoId = extractYouTubeID(url);
-      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง!");
+      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง! ตัวอย่าง: https://youtu.be/xxxx หรือ https://www.youtube.com/watch?v=xxxx");
 
-      socket.emit('dj-play-youtube', { videoId, title: "YouTube On Air" });
+      let title = `YouTube Track (${videoId})`;
+      try {
+        const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
+        const data = await res.json();
+        if (data.title) title = data.title;
+      } catch (e) {}
+
+      playlist.push({ name: `▶ [YT] ${title}`, type: 'youtube', videoId: videoId });
+      socket.emit('dj-add-youtube-to-playlist', { videoId, title: `▶ [YT] ${title}` });
+      
       djYtUrl.value = '';
+      alert(`เพิ่มเพลง "${title}" เข้าคิวเรียบร้อยแล้ว!`);
     });
   }
 
@@ -906,6 +917,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  // ==========================================
+  // ⏱️ Main Audio & Track Timer
+  // ==========================================
   let isBroadcastingMic = false;
   let mediaRecorder = null;
   let playlist = [];
@@ -1002,18 +1016,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (djFileInput) {
     djFileInput.onchange = (e) => {
-      playlist = Array.from(e.target.files);
-      socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name })));
+      const files = Array.from(e.target.files).map(f => {
+        f.type = 'mp3';
+        return f;
+      });
+      playlist = playlist.concat(files);
+      socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
     };
   }
 
+  // เล่นเพลงถัดไป รองรับทั้ง MP3 และ YouTube
   if (btnPlayMusic) {
     btnPlayMusic.onclick = async () => {
-      if (playlist.length === 0) return alert('กรุณาเลือกไฟล์เพลงก่อน');
-      const file = playlist.shift();
-      socket.emit('dj-update-track', { track: { title: file.name, artist: "DJ On Air (MP3)" } });
-      const arrayBuffer = await file.arrayBuffer();
-      socket.emit('dj-audio-stream', { type: 'music', buffer: arrayBuffer });
+      if (playlist.length === 0) return alert('ไม่มีเพลงในคิว กรุณาเลือกไฟล์ MP3 หรือเพิ่มลิงก์ YouTube ก่อน');
+      
+      const item = playlist.shift();
+      socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
+
+      if (item.type === 'youtube') {
+        if (currentMusicSource) {
+          currentMusicSource.stop();
+          currentMusicSource = null;
+        }
+        socket.emit('dj-play-youtube', { videoId: item.videoId, title: item.name });
+      } else {
+        socket.emit('dj-stop-youtube');
+        socket.emit('dj-update-track', { track: { title: item.name, artist: "DJ On Air (MP3)" } });
+        const arrayBuffer = await item.arrayBuffer();
+        socket.emit('dj-audio-stream', { type: 'music', buffer: arrayBuffer });
+      }
     };
   }
 

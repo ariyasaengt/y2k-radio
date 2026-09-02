@@ -214,9 +214,25 @@ io.on('connection', (socket) => {
     io.emit('dj-stop-youtube');
   });
 
-  // เล่นเพลงผ่าน YouTube สำหรับผู้ฟังทุกคน
+  // คิวเพลงและการเล่น YouTube
+  socket.on('dj-add-youtube-to-playlist', (item) => {
+    if (!socket.isDJ) return;
+    playlist.push({
+      name: item.title,
+      type: 'youtube',
+      videoId: item.videoId
+    });
+    io.emit('playlist-update', playlist);
+  });
+
+  socket.on('dj-update-playlist', (list) => {
+    if (!socket.isDJ) return;
+    playlist = list;
+    io.emit('playlist-update', playlist);
+  });
+
   socket.on('dj-play-youtube', (ytData) => {
-    if (!socket.isDJ || !isDJLive) return;
+    if (!socket.isDJ) return;
     currentTrack = {
       title: ytData.title || "YouTube Audio",
       artist: "DJ Broadcast (YouTube)",
@@ -231,12 +247,6 @@ io.on('connection', (socket) => {
     if (!socket.isDJ || !isDJLive) return;
     currentTrack = data.track;
     io.emit('track-update', currentTrack);
-  });
-
-  socket.on('dj-update-playlist', (list) => {
-    if (!socket.isDJ) return;
-    playlist = list;
-    io.emit('playlist-update', playlist);
   });
 
   socket.on('dj-audio-stream', (data) => {

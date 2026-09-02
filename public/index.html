@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Y2K Messenger Radio</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-  <!-- โหลด YouTube IFrame API -->
   <script src="https://www.youtube.com/iframe_api"></script>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -13,7 +12,7 @@
   <canvas id="glitter-canvas"></canvas>
   <div id="heart-container" class="heart-container"></div>
 
-  <!-- จุดฝัง YouTube Player ซ่อนเบื้องหลัง -->
+  <!-- ตัวเล่น YouTube แบบซ่อนเบื้องหลัง -->
   <div id="yt-player-hidden" style="position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;"></div>
 
   <div id="main-app-window" class="desktop-wrap">
@@ -59,7 +58,7 @@
           </div>
         </div>
 
-        <!-- คลื่นวิทยุไทยสด -->
+        <!-- Thai Radio Tuner -->
         <div class="section-box tuner-box">
           <div class="section-title">Thai Radio Tuner (คลื่นวิทยุไทยสด)</div>
           <select id="backup-station-select" class="y2k-select">
@@ -108,12 +107,12 @@
               <input type="file" id="dj-file-input" accept="audio/*" multiple style="display: none;">
             </div>
 
-            <!-- กล่องเปิดเพลงด้วย YouTube URL -->
+            <!-- กล่องเพิ่ม YouTube เข้าคิว -->
             <div class="yt-input-box">
-              <span class="sub-label">▶ เปิดเพลงจากลิงก์ YouTube:</span>
+              <span class="sub-label">▶ เพิ่มเพลงจากลิงก์ YouTube เข้าคิว:</span>
               <div class="input-row">
                 <input type="text" id="dj-yt-url" class="y2k-input flex-1" placeholder="วางลิงก์ เช่น https://youtu.be/...">
-                <button type="button" id="btn-play-yt" class="y2k-btn yt-play-btn">เปิดสด</button>
+                <button type="button" id="btn-play-yt" class="y2k-btn yt-play-btn">+ เพิ่มเข้าคิว</button>
               </div>
             </div>
 
@@ -150,7 +149,7 @@
             <div id="dj-broadcast-tools" class="broadcast-tools hide">
               <div class="btn-group">
                 <button id="btn-mic" class="y2k-btn">🎙️ เปิดไมค์</button>
-                <button id="btn-play-music" class="y2k-btn">🎵 เล่น MP3 ถัดไป</button>
+                <button id="btn-play-music" class="y2k-btn">🎵 เล่นเพลงถัดไป</button>
               </div>
 
               <div class="sfx-box">
@@ -305,6 +304,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

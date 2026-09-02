@@ -329,6 +329,7 @@ body {
   background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%) !important;
   color: #fff !important;
   border-color: #991b1b !important;
+  white-space: nowrap;
 }
 
 .topic-setter-box, .moderation-box {
