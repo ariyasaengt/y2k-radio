@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const chatInput = document.getElementById('chat-message');
   const usernameInput = document.getElementById('username');
   const btnSend = document.getElementById('btn-send');
+  const typingIndicator = document.getElementById('typing-indicator');
   const trackTitle = document.getElementById('track-title');
   const trackArtist = document.getElementById('track-artist');
   const playlistContainer = document.getElementById('playlist-container');
@@ -492,4 +493,40 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.reload(); // รีเฟรชเพื่อรีเซ็ต socket connection กลับเป็นผู้ฟังปกติ
       }
     });
+
+    // --- ระบบตรวจจับสถานะกำลังพิมพ์ (Typing Indicator) ---
+  let typingTimeout = null;
+
+  chatInput.addEventListener('input', () => {
+    const user = usernameInput.value.trim() || 'Guest';
+    
+    // แจ้งเตือนเซิร์ฟเวอร์ว่ากำลังพิมพ์
+    socket.emit('typing-start', user);
+
+    // รีเซ็ตเวลานับถอยหลัง หยุดพิมพ์เกิน 2 วินาทีถือว่ายกเลิก
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => {
+      socket.emit('typing-stop');
+    }, 2000);
+  });
+
+  // เมื่อส่งข้อความ ให้ยกเลิกสถานะกำลังพิมพ์ทันที
+  const originalSendMessage = sendMessage;
+  sendMessage = function() {
+    clearTimeout(typingTimeout);
+    socket.emit('typing-stop');
+    originalSendMessage();
+  };
+
+  // รับข้อมูลว่ามีใครกำลังพิมพ์อยู่
+  socket.on('user-typing', (data) => {
+    if (!typingIndicator) return;
+    if (data.isTyping) {
+      typingIndicator.textContent = `✎ ${data.user} กำลังพิมพ์ข้อความ...`;
+      typingIndicator.classList.remove('hide');
+    } else {
+      typingIndicator.textContent = '';
+      typingIndicator.classList.add('hide');
+    }
+  });
   }

@@ -604,3 +604,18 @@ body {
     width: 70px;
   }
 }
+
+/* ข้อความแจ้งเตือนสถานะกำลังพิมพ์ */
+.typing-status {
+  font-size: 11px;
+  color: #0369a1;
+  font-style: italic;
+  padding: 2px 4px;
+  min-height: 18px;
+  animation: pulseTyping 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseTyping {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}

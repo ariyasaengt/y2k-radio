@@ -125,6 +125,16 @@ io.on('connection', (socket) => {
       }
     }
   });
+
+  // รับสัญญาณเริ่มพิมพ์ข้อความ
+  socket.on('typing-start', (username) => {
+    socket.broadcast.emit('user-typing', { user: username || 'Guest', isTyping: true });
+  });
+
+  // รับสัญญาณหยุดพิมพ์ข้อความ
+  socket.on('typing-stop', () => {
+    socket.broadcast.emit('user-typing', { isTyping: false });
+  });
 });
 
 const PORT = process.env.PORT || 3000;
