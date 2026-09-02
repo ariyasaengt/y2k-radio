@@ -1,8 +1,5 @@
 const express = require('express');
 const http = require('http');
-const https = require('https');
-const net = require('net');
-const tls = require('tls');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
@@ -12,75 +9,6 @@ const server = http.createServer(app);
 const io = new Server(server, { maxHttpBufferSize: 1e7 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-
-// ========================================================
-// 📻 Bulletproof Audio Proxy (แก้ปัญหา ICY 200 OK & Mixed Content)
-// ========================================================
-app.get('/api/radio-stream', (req, res) => {
-  const targetUrl = req.query.url;
-  if (!targetUrl) return res.status(400).send("No stream URL");
-
-  try {
-    const parsed = new URL(targetUrl);
-    const isHttps = parsed.protocol === 'https:';
-    const port = parsed.port || (isHttps ? 443 : 80);
-    const host = parsed.hostname;
-    const requestPath = (parsed.pathname || '/') + (parsed.search || '');
-
-    const connector = isHttps ? tls : net;
-    const client = connector.connect({
-      host: host,
-      port: Number(port),
-      servername: isHttps ? host : undefined,
-      rejectUnauthorized: false
-    }, () => {
-      // ส่งคำขอแบบดั้งเดิมที่ Icecast/Shoutcast ตอบรับแน่นอน
-      const httpRequest = 
-        `GET ${requestPath} HTTP/1.0\r\n` +
-        `Host: ${host}\r\n` +
-        `User-Agent: WinampMPEG/5.09\r\n` +
-        `Accept: */*\r\n` +
-        `Icy-MetaData: 0\r\n` +
-        `Connection: close\r\n\r\n`;
-      client.write(httpRequest);
-    });
-
-    let headerParsed = false;
-    let buffer = Buffer.alloc(0);
-
-    client.on('data', (chunk) => {
-      if (!headerParsed) {
-        buffer = Buffer.concat([buffer, chunk]);
-        const headerEnd = buffer.indexOf('\r\n\r\n');
-        if (headerEnd !== -1) {
-          headerParsed = true;
-          // ตอบกลับเบราว์เซอร์ด้วย HTTP 200 มาตรฐานที่เล่นเสียงได้แน่นอน
-          res.writeHead(200, {
-            'Content-Type': 'audio/mpeg',
-            'Cache-Control': 'no-cache, no-store',
-            'Connection': 'keep-alive',
-            'Access-Control-Allow-Origin': '*'
-          });
-          const bodyData = buffer.slice(headerEnd + 4);
-          if (bodyData.length > 0) res.write(bodyData);
-        }
-      } else {
-        res.write(chunk);
-      }
-    });
-
-    client.on('error', (err) => {
-      console.error("Radio Stream Error:", err.message);
-      if (!res.headersSent) res.status(502).send("Radio Offline");
-    });
-
-    req.on('close', () => {
-      client.destroy();
-    });
-  } catch (err) {
-    res.status(500).send("Invalid URL");
-  }
-});
 
 // รหัสผ่าน Super Admin
 const ADMIN_SECRET_KEY = "0024252600";
@@ -275,8 +203,9 @@ io.on('connection', (socket) => {
     io.emit('dj-stop-youtube');
   });
 
+  // เล่นเพลง YouTube ทันที
   socket.on('dj-play-youtube', (ytData) => {
-    if (!isDJLive || (socket.userRole !== 'admin' && socket.userRole !== 'dj')) return;
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     currentTrack = {
       title: ytData.title || "YouTube Audio",
       artist: socket.userRole === 'admin' ? "Super Admin" : `DJ ${socket.djName}`,
@@ -285,6 +214,34 @@ io.on('connection', (socket) => {
     };
     io.emit('track-update', currentTrack);
     io.emit('play-youtube-track', ytData);
+  });
+
+  // ดึงชื่อเพลงจริงจาก YouTube oEmbed ฝั่งเซิร์ฟเวอร์
+  socket.on('dj-add-youtube-to-playlist', async (item) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+
+    let songTitle = "YouTube Audio";
+    const ytUrl = `https://www.youtube.com/watch?v=${item.videoId}`;
+
+    try {
+      const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(ytUrl)}&format=json`);
+      if (response.ok) {
+        const info = await response.json();
+        if (info && info.title) {
+          songTitle = info.title;
+        }
+      }
+    } catch (err) {
+      console.error("YouTube oEmbed fetch error:", err.message);
+    }
+
+    playlist.push({
+      name: `▶ [YT] ${songTitle}`,
+      type: 'youtube',
+      videoId: item.videoId
+    });
+
+    io.emit('playlist-update', playlist);
   });
 
   socket.on('dj-audio-stream', (data) => {
@@ -296,12 +253,6 @@ io.on('connection', (socket) => {
     if (!isDJLive || (socket.userRole !== 'admin' && socket.userRole !== 'dj')) return;
     currentTrack = data.track;
     io.emit('track-update', currentTrack);
-  });
-
-  socket.on('dj-add-youtube-to-playlist', (item) => {
-    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
-    playlist.push({ name: item.title, type: 'youtube', videoId: item.videoId });
-    io.emit('playlist-update', playlist);
   });
 
   socket.on('dj-update-playlist', (list) => {

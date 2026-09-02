@@ -10,7 +10,6 @@
 <body>
   <canvas id="glitter-canvas"></canvas>
   <div id="heart-container" class="heart-container"></div>
-  <div id="yt-player-hidden" style="position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none;"></div>
 
   <div id="main-app-window" class="desktop-wrap">
     <!-- แถบซ้าย: สถานีวิทยุและดีเจ -->
@@ -38,6 +37,12 @@
           <div class="now-playing-box">
             <div id="track-title" class="track-title">รอเริ่มรายการ</div>
             <div id="track-artist" class="track-sub">Offline</div>
+
+            <!-- หน้าจอ Mini Player สำหรับ YouTube (เล่นได้จริง ไม่ถูกบล็อก) -->
+            <div id="yt-screen-wrapper" class="yt-screen-container hide">
+              <div id="yt-player-element"></div>
+            </div>
+
             <div class="track-timer-row">
               <span id="track-time-current">00:00</span>
               <div class="track-progress-bg"><div id="track-progress-fill" class="track-progress-fill"></div></div>
@@ -59,7 +64,7 @@
             <optgroup label="🎵 เพลงสตริง / สากลฮิต">
               <option value="https://stream.zeno.fm/0r0xa792kwzuv">CityPop & Retro Hits 80s-90s</option>
               <option value="https://stream.zeno.fm/u2768tz918zuv">Thai Pop Radio Hits (เพลงไทยฮิต)</option>
-              <option value="https://icecast.bkwsu.eu/connectthailand.mp3">Connect Thailand Radio (ฟังสบาย 24 ชม.)</option>
+              <option value="https://icecast.bkwsu.eu/connectthailand.mp3">Connect Thailand Radio (24 ชม.)</option>
             </optgroup>
             <optgroup label="🌾 ลูกทุ่ง / หมอลำ / เพื่อชีวิต">
               <option value="https://stream.zeno.fm/4wy075u3a0hvv">สถานีเพลงลูกทุ่ง & หมอลำ</option>
@@ -72,6 +77,7 @@
           <audio id="backup-audio-player" controls preload="none" style="width: 100%; height: 28px; margin-top: 6px;"></audio>
         </div>
 
+        <!-- Playlist Queue พร้อมปุ่มกดเล่นทันที -->
         <div class="section-box playlist-section">
           <div class="section-title">Playlist Queue</div>
           <ul id="playlist-container" class="playlist-list">
@@ -336,6 +342,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

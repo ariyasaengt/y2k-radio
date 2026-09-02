@@ -110,14 +110,95 @@ document.addEventListener('DOMContentLoaded', () => {
   let isShowLive = false;
   let isDucking = false;
   let previousMusicVol = 80;
+  let playlist = [];
+
+  // ==========================================
+  // 🎥 YouTube IFrame Player
+  // ==========================================
+  let ytPlayer = null;
+  let isYtReady = false;
+  const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
+
+  window.onYouTubeIframeAPIReady = function() {
+    ytPlayer = new YT.Player('yt-player-element', {
+      height: '140',
+      width: '100%',
+      playerVars: {
+        'autoplay': 1,
+        'controls': 1,
+        'rel': 0,
+        'playsinline': 1
+      },
+      events: {
+        'onReady': () => { isYtReady = true; },
+        'onStateChange': (e) => {
+          if (e.data === YT.PlayerState.PLAYING) {
+            if (trackTimerInterval) clearInterval(trackTimerInterval);
+            const duration = ytPlayer.getDuration();
+            if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
+            trackTimerInterval = setInterval(() => {
+              if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+              const current = ytPlayer.getCurrentTime();
+              if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(current);
+              if (trackProgressFill) trackProgressFill.style.width = `${Math.min(100, (current / duration) * 100)}%`;
+            }, 1000);
+          }
+        }
+      }
+    });
+  };
+
+  function playYouTubeTrack(videoId, title) {
+    if (ytScreenWrapper) ytScreenWrapper.classList.remove('hide');
+    if (trackTitle) trackTitle.textContent = title || "YouTube Track";
+    if (trackArtist) trackArtist.textContent = "YouTube Broadcast";
+
+    if (isYtReady && ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+      ytPlayer.loadVideoById(videoId);
+      ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
+      ytPlayer.playVideo();
+    } else {
+      setTimeout(() => playYouTubeTrack(videoId, title), 800);
+    }
+  }
+
+  socket.on('play-youtube-track', (data) => {
+    initAudioContext();
+    if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
+    playYouTubeTrack(data.videoId, data.title);
+  });
+
+  socket.on('dj-stop-youtube', () => {
+    if (ytScreenWrapper) ytScreenWrapper.classList.add('hide');
+    if (isYtReady && ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+      ytPlayer.stopVideo();
+    }
+  });
+
+  function extractYouTubeID(url) {
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    return match ? match[1] : null;
+  }
+
+  // กดเพิ่ม YouTube เข้าคิว ส่งให้เซิร์ฟเวอร์ดึงชื่อจริง
+  if (btnPlayYt) {
+    btnPlayYt.addEventListener('click', () => {
+      const url = djYtUrl.value.trim();
+      if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
+      const videoId = extractYouTubeID(url);
+      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง!");
+
+      socket.emit('dj-add-youtube-to-playlist', { videoId: videoId });
+      djYtUrl.value = '';
+    });
+  }
 
   // ========================================================
-  // 📻 Thai Radio Streams (Direct Stream ปลอดภัย ไม่โดนบล็อก)
+  // 📻 Thai Radio Streams (Direct Stream)
   // ========================================================
   if (backupStationSelect) {
     backupStationSelect.addEventListener('change', (e) => {
       const streamUrl = e.target.value;
-
       if (!streamUrl) {
         backupAudioPlayer.pause();
         backupAudioPlayer.removeAttribute('src');
@@ -125,7 +206,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      // หยุดระบบเสียงของสถานีหลักหากกำลังเปิดอยู่
       if (listenAudioCtx && listenAudioCtx.state === 'running') {
         listenAudioCtx.suspend();
         btnListen.textContent = "▶ ฟังสถานีหลัก";
@@ -138,9 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const playPromise = backupAudioPlayer.play();
       if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          // หากเบราว์เซอร์บล็อก Autoplay ให้ผู้ใช้กดปุ่ม Play สามเหลี่ยมที่เครื่องเล่นเองได้
-        });
+        playPromise.catch(() => {});
       }
     });
   }
@@ -220,6 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
           djPortalName.textContent = res.name;
           usernameInput.value = res.name;
         }
+        renderPlaylist();
       } else {
         loginError.textContent = res.message;
         loginError.classList.remove('hide');
@@ -250,6 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
             djPortalName.textContent = res.name;
             usernameInput.value = res.name;
           }
+          renderPlaylist();
         } else {
           localStorage.removeItem('auth_session');
         }
@@ -328,6 +408,7 @@ document.addEventListener('DOMContentLoaded', () => {
     roleBadge.style.borderColor = "#ca8a04";
     adminApprovalPanel.classList.add('hide');
     if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.add('hide');
+    renderPlaylist();
     alert(`🎉 แอดมินอนุมัติให้คุณ ${djName} ขึ้นจัดรายการสดแล้ว!`);
   });
 
@@ -347,75 +428,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnDjLogout.onclick = performLogout;
   btnDjPortalLogout.onclick = performLogout;
-
-  // ==========================================
-  // 🎥 YouTube Player
-  // ==========================================
-  let ytPlayer = null;
-  let isYtReady = false;
-
-  window.onYouTubeIframeAPIReady = function() {
-    ytPlayer = new YT.Player('yt-player-hidden', {
-      height: '1', width: '1',
-      playerVars: { 'autoplay': 1, 'controls': 0, 'disablekb': 1, 'fs': 0 },
-      events: {
-        'onReady': () => { isYtReady = true; },
-        'onStateChange': (e) => {
-          if (e.data === YT.PlayerState.PLAYING) {
-            if (trackTimerInterval) clearInterval(trackTimerInterval);
-            const duration = ytPlayer.getDuration();
-            if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
-            trackTimerInterval = setInterval(() => {
-              if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
-              const current = ytPlayer.getCurrentTime();
-              if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(current);
-              if (trackProgressFill) trackProgressFill.style.width = `${Math.min(100, (current / duration) * 100)}%`;
-            }, 1000);
-          }
-        }
-      }
-    });
-  };
-
-  function extractYouTubeID(url) {
-    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-    return match ? match[1] : null;
-  }
-
-  if (btnPlayYt) {
-    btnPlayYt.addEventListener('click', async () => {
-      const url = djYtUrl.value.trim();
-      if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
-      const videoId = extractYouTubeID(url);
-      if (!videoId) return alert("ลิงก์ไม่ถูกต้อง!");
-
-      let title = `YouTube Track (${videoId})`;
-      try {
-        const res = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
-        const data = await res.json();
-        if (data.title) title = data.title;
-      } catch (e) {}
-
-      playlist.push({ name: `▶ [YT] ${title}`, type: 'youtube', videoId: videoId });
-      socket.emit('dj-add-youtube-to-playlist', { videoId, title: `▶ [YT] ${title}` });
-      djYtUrl.value = '';
-      alert(`เพิ่ม "${title}" เข้าคิวเรียบร้อย!`);
-    });
-  }
-
-  socket.on('play-youtube-track', (data) => {
-    initAudioContext();
-    if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
-    if (isYtReady && ytPlayer) {
-      ytPlayer.loadVideoById(data.videoId);
-      ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
-      ytPlayer.playVideo();
-    }
-  });
-
-  socket.on('dj-stop-youtube', () => {
-    if (isYtReady && ytPlayer && typeof ytPlayer.stopVideo === 'function') ytPlayer.stopVideo();
-  });
 
   // ==========================================
   // ✨ Glitter & Reactions & Nudge
@@ -724,9 +736,9 @@ document.addEventListener('DOMContentLoaded', () => {
   chatColor.oninput = (e) => { currentStyle.color = e.target.value; chatInput.style.color = currentStyle.color; };
 
   // ==========================================
-  // ⏱️ Audio Streaming
+  // ⏱️ Audio Streaming & Playlist Render
   // ==========================================
-  let isBroadcastingMic = false, mediaRecorder = null, playlist = [], trackTimerInterval = null;
+  let isBroadcastingMic = false, mediaRecorder = null, trackTimerInterval = null;
   function formatTime(s) { return `${Math.floor(s/60).toString().padStart(2, '0')}:${Math.floor(s%60).toString().padStart(2, '0')}`; }
 
   btnListen.onclick = async () => {
@@ -771,17 +783,57 @@ document.addEventListener('DOMContentLoaded', () => {
     if (["รอเริ่มรายการ", "จบรายการแล้ว", "ดีเจออฟไลน์"].includes(t.title)) {
       if (trackTimerInterval) clearInterval(trackTimerInterval);
       trackTimeCurrent.textContent = "00:00"; trackTimeTotal.textContent = "00:00"; trackProgressFill.style.width = "0%";
+      if (ytScreenWrapper) ytScreenWrapper.classList.add('hide');
     }
   });
 
-  socket.on('playlist-update', (list) => {
+  function renderPlaylist() {
+    if (!playlistContainer) return;
     playlistContainer.innerHTML = '';
-    if (!list || list.length === 0) { playlistContainer.innerHTML = '<li>ไม่มีรายการเพลง</li>'; return; }
-    list.forEach((t, i) => {
+    if (!playlist || playlist.length === 0) {
+      playlistContainer.innerHTML = '<li>ไม่มีรายการเพลง</li>';
+      return;
+    }
+    playlist.forEach((t, i) => {
       const li = document.createElement('li');
-      li.textContent = `${i + 1}. ${t.name}`;
+      li.innerHTML = `
+        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px;">${i + 1}. ${t.name}</span>
+        ${(myRole === 'admin' || myRole === 'dj') ? `<button class="play-now-pill" data-idx="${i}">▶ เล่น</button>` : ''}
+      `;
       playlistContainer.appendChild(li);
     });
+
+    playlistContainer.querySelectorAll('.play-now-pill').forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.getAttribute('data-idx'));
+        playItemAtIndex(idx);
+      };
+    });
+  }
+
+  function playItemAtIndex(idx) {
+    if (!playlist[idx]) return;
+    const item = playlist.splice(idx, 1)[0];
+    socket.emit('dj-update-playlist', playlist);
+
+    if (item.type === 'youtube') {
+      if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
+      socket.emit('dj-play-youtube', { videoId: item.videoId, title: item.name });
+    } else {
+      socket.emit('dj-stop-youtube');
+      socket.emit('dj-update-track', { track: { title: item.name, artist: myRole === 'admin' ? "Super Admin (MP3)" : `DJ ${myDJName} (MP3)` } });
+      if (item.arrayBuffer) {
+        item.arrayBuffer().then(ab => {
+          socket.emit('dj-audio-stream', { type: 'music', buffer: ab });
+        });
+      }
+    }
+  }
+
+  socket.on('playlist-update', (list) => {
+    playlist = list || [];
+    renderPlaylist();
   });
 
   djFileInput.onchange = (e) => {
@@ -790,19 +842,9 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
   };
 
-  btnPlayMusic.onclick = async () => {
+  btnPlayMusic.onclick = () => {
     if (playlist.length === 0) return alert('ไม่มีเพลงในคิว');
-    const item = playlist.shift();
-    socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
-    if (item.type === 'youtube') {
-      if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
-      socket.emit('dj-play-youtube', { videoId: item.videoId, title: item.name });
-    } else {
-      socket.emit('dj-stop-youtube');
-      socket.emit('dj-update-track', { track: { title: item.name, artist: myRole === 'admin' ? "Super Admin (MP3)" : `DJ ${myDJName} (MP3)` } });
-      const ab = await item.arrayBuffer();
-      socket.emit('dj-audio-stream', { type: 'music', buffer: ab });
-    }
+    playItemAtIndex(0);
   };
 
   btnMic.onclick = async () => {

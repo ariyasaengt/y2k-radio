@@ -182,6 +182,26 @@ body {
   margin-bottom: 4px;
 }
 
+/* กรอบจอ Mini YouTube Player สไตล์เรโทร */
+.yt-screen-container {
+  width: 100%;
+  height: 140px;
+  background: #000;
+  border: 2px solid #38bdf8;
+  border-radius: 4px;
+  margin: 6px 0;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.yt-screen-container iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border: none;
+}
+
 .track-timer-row {
   display: flex;
   align-items: center;
@@ -232,6 +252,30 @@ body {
   background: #f0f5fa;
   border-bottom: 1px solid #d4e2ee;
   font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.15s ease;
+}
+
+.playlist-list li:hover {
+  background: #e0f2fe;
+}
+
+.play-now-pill {
+  background: #10b981;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.play-now-pill:hover {
+  background: #059669;
 }
 
 .chat-window { flex: 1; }
@@ -373,6 +417,7 @@ body {
   margin-top: 6px;
 }
 
+/* จัดกึ่งกลางตัวเลขในวงเล็บให้ตรงบรรทัด ไม่ลอย */
 .sfx-title {
   font-weight: bold;
   font-size: 11px;
@@ -691,7 +736,7 @@ body {
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 5px; }
 .error-msg { color: #cc0000; font-size: 11px; font-weight: bold; }
 
-/* จัดการความกว้างและป้องกันปุ่มล้นขอบ */
+/* ป้องกันปุ่มล้นขอบทั้งหมดใน sidebar */
 .side-bar .input-row {
   display: flex !important;
   gap: 4px !important;
