@@ -22,20 +22,43 @@ let pinnedMessage = null;
 let playlist = [];
 let songRequests = [];
 let djQueue = [];
-
 let onlineUsersCount = 0;
-let totalHitsCount = 1337;
 let currentVolumes = { music: 0.8, mic: 1.0 };
 
-// Auto-DJ Playlist (เพลงฮิตยุค 2000s)
+// ----------------------------------------------------
+// 📊 ระบบสถิติผู้เข้าชมจริง (Unique Visitors Database)
+// ----------------------------------------------------
+const STATS_FILE = path.join(__dirname, 'stats.json');
+let siteStats = { totalHits: 0, visitedIps: [] };
+
+function loadSiteStats() {
+  try {
+    if (fs.existsSync(STATS_FILE)) {
+      siteStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf-8'));
+      if (!Array.isArray(siteStats.visitedIps)) siteStats.visitedIps = [];
+    } else {
+      siteStats = { totalHits: 1, visitedIps: [] };
+      saveSiteStats();
+    }
+  } catch (err) {
+    siteStats = { totalHits: 1, visitedIps: [] };
+  }
+}
+
+function saveSiteStats() {
+  try {
+    fs.writeFileSync(STATS_FILE, JSON.stringify(siteStats, null, 2), 'utf-8');
+  } catch (err) {}
+}
+loadSiteStats();
+
+// Auto-DJ Playlist
 const AUTO_DJ_PLAYLIST = [
   { videoId: '5qap5aO4i9A', title: 'Lofi Hip Hop - Chill Beats 2000s' },
   { videoId: 'jfKfPfyJRdk', title: 'Lofi Girl - Relaxing Radio' },
   { videoId: '7NOSDKb0HlU', title: 'Retro Y2K Pop Melodies' }
 ];
 let autoDjIndex = 0;
-
-// โพลเพลงสด (Music Battle)
 let activePoll = null;
 
 function getThaiTime() {
@@ -111,7 +134,6 @@ function checkDayReset() {
   }
 }
 
-// เริ่มเล่น Auto-DJ อัตโนมัติถ้าไม่มีดีเจสด
 function startAutoDJ() {
   if (isDJLive) return;
   const track = AUTO_DJ_PLAYLIST[autoDjIndex % AUTO_DJ_PLAYLIST.length];
@@ -132,7 +154,6 @@ function startAutoDJ() {
   });
 }
 
-// ส่ง Sync Pulse ทุก 3 วินาที
 setInterval(() => {
   if (currentTrack.youtubeId && currentTrack.startedAt) {
     const currentSeconds = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
@@ -159,9 +180,17 @@ io.on('connection', (socket) => {
   }
 
   onlineUsersCount++;
-  totalHitsCount++;
   io.emit('online-users-count', onlineUsersCount);
-  io.emit('hit-counter-update', totalHitsCount);
+
+  // ตรวจสอบและนับเฉพาะผู้เข้าชมจริง (Unique Visitor)
+  if (clientIp && !siteStats.visitedIps.includes(clientIp)) {
+    siteStats.visitedIps.push(clientIp);
+    siteStats.totalHits = siteStats.visitedIps.length;
+    saveSiteStats();
+  }
+  
+  // ส่งจำนวนคนจริงที่เคยเข้าชมทั้งหมดไปแสดงบนหน้าจอ
+  socket.emit('hit-counter-update', siteStats.totalHits || 1);
   checkDayReset();
 
   socket.emit('dj-status-update', isDJLive);
@@ -188,7 +217,6 @@ io.on('connection', (socket) => {
   socket.emit('chat-history', chatHistory);
   if (activePoll) socket.emit('poll-update', activePoll);
 
-  // แชทส่วนรวม
   socket.on('chat-message', (data) => {
     checkDayReset();
     const newMsg = {
@@ -206,7 +234,6 @@ io.on('connection', (socket) => {
     io.emit('chat-message', newMsg);
   });
 
-  // แชทกระซิบส่วนตัว (Private Whisper)
   socket.on('private-whisper', (data) => {
     const targetSocket = io.sockets.sockets.get(data.targetSocketId);
     const whisperPayload = {
@@ -222,7 +249,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ส่ง MSN Winks (แอนิเมชันเต็มจอ)
   socket.on('send-wink', (winkType) => {
     io.emit('receive-wink', {
       user: socket.djName || 'ใครบางคน',
@@ -230,7 +256,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ระบบโพลเพลงสด (Music Battle)
   socket.on('dj-create-poll', (pollData) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     activePoll = {
@@ -264,7 +289,6 @@ io.on('connection', (socket) => {
     io.emit('poll-update', null);
   });
 
-  // ขอเพลงนิรนาม / สารภาพรัก
   socket.on('submit-secret-dedication', (data) => {
     const item = {
       id: Date.now(),
@@ -277,7 +301,6 @@ io.on('connection', (socket) => {
     io.emit('requests-update', songRequests);
   });
 
-  // Moderation: Kick / Ban
   socket.on('admin-kick-user', (targetSocketId) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     const target = io.sockets.sockets.get(targetSocketId);
@@ -415,7 +438,6 @@ io.on('connection', (socket) => {
     io.emit('dj-status-update', false);
     io.emit('track-update', currentTrack);
     io.emit('dj-stop-youtube');
-    // ถอยกลับมาเล่น Auto-DJ ต่อเนื่อง
     startAutoDJ();
   });
 
@@ -575,6 +597,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
-  // เริ่มต้น Auto-DJ
   startAutoDJ();
 });
