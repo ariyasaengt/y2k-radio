@@ -16,10 +16,10 @@ const ADMIN_SECRET_KEY = "0024252600";
 let adminSocketId = null;
 let currentBroadcaster = null;
 let isDJLive = false;
-let showStartedAt = null; // เวลาเริ่มรายการสด (Timestamp)
+let showStartedAt = null;
 let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
 let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨";
-let marqueeNotice = "✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • สเปกตรัมเต้นสดสไตล์ Winamp • พิมพ์โค้ดสี MSN Plus เช่น ·$4แดง ·$1 ·$3เขียว ได้เลย! ✨";
+let marqueeNotice = "🎵 Y2K Retro Radio • ฟังเพลงฮิตยุค 2000s ลื่นไหลตลอดวัน • พิมพ์คุยในแชทและขอเพลงโปรดของคุณได้ทันที ✨";
 let pinnedMessage = null;
 let playlist = [];
 let songRequests = [];
@@ -30,7 +30,7 @@ let currentVolumes = { music: 0.8, mic: 1.0 };
 const activeUsers = new Map();
 
 // ----------------------------------------------------
-// 📊 สถิติผู้เข้าชมจริง (Unique Device Token)
+// สถิติผู้เข้าชมจริง (Unique Device Token)
 // ----------------------------------------------------
 const STATS_FILE = path.join(__dirname, 'stats.json');
 let siteStats = { totalHits: 0, visitedTokens: [] };
@@ -56,7 +56,6 @@ function saveSiteStats() {
 }
 loadSiteStats();
 
-// Auto-DJ Playlist
 const AUTO_DJ_PLAYLIST = [
   { videoId: '5qap5aO4i9A', title: 'Lofi Hip Hop - Chill Beats 2000s' },
   { videoId: 'jfKfPfyJRdk', title: 'Lofi Girl - Relaxing Radio' },
@@ -158,15 +157,16 @@ function startAutoDJ() {
   });
 }
 
+// ซิงค์ชีพจรระบบทุก 5 วินาที
 setInterval(() => {
-  if (currentTrack.youtubeId && currentTrack.startedAt) {
-    const currentSeconds = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
+  if (currentTrack.youtubeId && currentTrack.startedAt && (isDJLive || !currentBroadcaster)) {
     io.emit('radio-sync-pulse', {
       videoId: currentTrack.youtubeId,
-      currentTime: currentSeconds
+      startedAt: currentTrack.startedAt,
+      serverTime: Date.now()
     });
   }
-}, 3000);
+}, 5000);
 
 function getClientIp(socket) {
   const forwarded = socket.handshake.headers['x-forwarded-for'];
@@ -218,7 +218,6 @@ io.on('connection', (socket) => {
   });
 
   checkDayReset();
-  
   socket.emit('dj-status-update', { isLive: isDJLive, startedAt: showStartedAt });
 
   let trackToSend = { ...currentTrack };
@@ -250,7 +249,6 @@ io.on('connection', (socket) => {
     io.emit('marquee-update', marqueeNotice);
   });
 
-  // พักเพลง / เล่นต่อ
   socket.on('dj-pause-track', () => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     io.emit('radio-pause-track');
@@ -259,6 +257,15 @@ io.on('connection', (socket) => {
   socket.on('dj-resume-track', () => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     io.emit('radio-resume-track');
+  });
+
+  socket.on('dj-track-ended', () => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    currentTrack.youtubeId = null;
+    currentTrack.startedAt = null;
+    currentTrack.title = "จบเพลงแล้ว (รอคิวถัดไป)";
+    io.emit('track-update', currentTrack);
+    io.emit('dj-stop-youtube');
   });
 
   socket.on('chat-message', (data) => {

@@ -315,6 +315,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // 🎥 YouTube Direct Embed
   // ========================================================
   let currentYtVideoId = null;
+  let lastClientYtTime = 0;
+  let ytRealDuration = 0;
   const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
 
   function sendIframeCommand(func, args = []) {
@@ -332,6 +334,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!videoId) return;
     currentYtVideoId = videoId;
     isMusicPaused = false;
+    lastClientYtTime = seekTo || 0;
 
     if (ytScreenWrapper) {
       ytScreenWrapper.classList.remove('hide');
@@ -364,18 +367,40 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof e.data !== 'string') return;
       const data = JSON.parse(e.data);
       if (data.event === 'infoDelivery' && data.info) {
+        if (data.info.duration && data.info.duration > 0) {
+          ytRealDuration = Math.floor(data.info.duration);
+        }
+        if (data.info.currentTime !== undefined) {
+          lastClientYtTime = data.info.currentTime;
+        }
+
+        // เมื่อเพลงเล่นจบจริง
         if (data.info.playerState === 0) {
-          if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
-            playItemAtIndex(0);
+          if (myRole === 'admin' || myRole === 'dj') {
+            if (isShowLive && playlist.length > 0) {
+              playItemAtIndex(0);
+            } else {
+              currentYtVideoId = null;
+              socket.emit('dj-track-ended');
+            }
           }
         }
       }
     } catch(err) {}
   });
 
+  // ซิงค์อัจฉริยะ: ไม่ดึง seekTo รบกวนหากเล่นห่างกันเล็กน้อย
   socket.on('radio-sync-pulse', (data) => {
-    if (currentYtVideoId === data.videoId && !isMusicPaused) {
-      sendIframeCommand('seekTo', [data.currentTime, true]);
+    if (!currentYtVideoId || currentYtVideoId !== data.videoId || isMusicPaused) return;
+
+    const targetTime = Math.max(0, (Date.now() - data.startedAt) / 1000);
+    if (ytRealDuration > 0 && targetTime >= ytRealDuration) return;
+
+    const drift = Math.abs(targetTime - lastClientYtTime);
+
+    // แก้ไขหัวอ่านเฉพาะเมื่อหลุดจังหวะเกิน 5 วินาทีจริง
+    if (drift > 5.0) {
+      sendIframeCommand('seekTo', [targetTime, true]);
     }
   });
 
@@ -387,6 +412,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('dj-stop-youtube', () => {
     currentYtVideoId = null;
+    ytRealDuration = 0;
     if (ytScreenWrapper) {
       ytScreenWrapper.innerHTML = '';
       ytScreenWrapper.classList.add('hide');
@@ -836,14 +862,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // ปรับลดความเร็วการเคลื่อนที่ลงอย่างมาก เพื่อความนุ่มนวลและไม่ตาลาย
       simTick += 0.022;
 
       for (let c = 0; c < numColumns; c++) {
         let targetLevel = 0;
 
         if (isMusicPaused) {
-          // หากดีเจสั่งพักเพลง: เต้นตามเสียงไมค์พูด ถ้าไม่พูดจะลดแตะ 0
           if (hasRealAudio && micEnergy > 40) {
             const binIndex = Math.floor((c / numColumns) * 16);
             targetLevel = Math.min(1.0, (dataArray[binIndex] / 255) * 1.5);
@@ -851,11 +875,9 @@ document.addEventListener('DOMContentLoaded', () => {
             targetLevel = 0;
           }
         } else if (hasRealAudio && micEnergy > 40) {
-          // มีเสียงไมค์ดีเจเข้ามาจริง
           const binIndex = Math.floor((c / numColumns) * 16);
           targetLevel = (dataArray[binIndex] / 255);
         } else if (isListeningToMain || isShowLive) {
-          // ขณะกำลังเล่นเพลง: คำนวณคลื่นความถี่จำลองด้วยความเร็วที่นุ่มนวล
           const w1 = Math.sin(simTick * 1.2 + c * 0.38);
           const w2 = Math.cos(simTick * 0.9 - c * 0.28);
           const w3 = Math.sin(simTick * 2.1 + (c % 4));
@@ -867,12 +889,10 @@ document.addEventListener('DOMContentLoaded', () => {
           targetLevel = 0;
         }
 
-        // Smooth Lerp: ให้แถบไฟค่อยๆ เคลื่อนไหวอย่างสมูท
         currentLevels[c] += (targetLevel - currentLevels[c]) * 0.18;
         const activeBlocks = Math.round(currentLevels[c] * numRows);
         const colX = c * (blockWidth + colGap);
 
-        // ไล่เฉดสีชมพูบานเย็น (ซ้าย) ไปส้ม (ขวา)
         const colRatio = c / (numColumns - 1);
         const r = 255;
         const g = Math.round(35 + colRatio * 115);
@@ -888,7 +908,6 @@ document.addEventListener('DOMContentLoaded', () => {
             vCtx.fillRect(colX, blockY, blockWidth, blockHeight);
             vCtx.shadowBlur = 0;
           } else {
-            // บล็อกเงาพื้นหลัง
             vCtx.fillStyle = 'rgba(255, 60, 90, 0.1)';
             vCtx.fillRect(colX, blockY, blockWidth, blockHeight);
           }
