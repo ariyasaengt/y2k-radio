@@ -5,19 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let myDJName = '';
   let isListeningToMain = false;
 
-  // Gateways
-  const msnAuthGateway = document.getElementById('msn-auth-gateway');
   const mainAppWindow = document.getElementById('main-app-window');
-  const authUsername = document.getElementById('auth-username');
-  const authPassword = document.getElementById('auth-password');
-  const authInitialStatus = document.getElementById('auth-initial-status');
-  const authRemember = document.getElementById('auth-remember');
-  const authErrorBanner = document.getElementById('auth-error-banner');
-  const btnMsnSignin = document.getElementById('btn-msn-signin');
-  const linkOpenDjReg = document.getElementById('link-open-dj-reg');
-  const btnAppLogout = document.getElementById('btn-app-logout');
-
-  // Station Elements
   const stationStatus = document.getElementById('station-status');
   const onlineUsersBadge = document.getElementById('online-users-badge');
   const chatLogs = document.getElementById('chat-logs');
@@ -43,13 +31,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const backupStationSelect = document.getElementById('backup-station-select');
   const backupAudioPlayer = document.getElementById('backup-audio-player');
 
-  // DJ Controls
+  // สิทธิ์ / Portal / แผงดีเจ
+  const btnOpenLoginModal = document.getElementById('btn-open-login-modal');
+  const btnOpenRegisterModal = document.getElementById('btn-open-register-modal');
+  const djLoginSection = document.getElementById('dj-login-section');
   const djPortalSection = document.getElementById('dj-portal-section');
   const djPortalName = document.getElementById('dj-portal-name');
   const btnRequestToLive = document.getElementById('btn-request-to-live');
   const djPortalWaitingText = document.getElementById('dj-portal-waiting-text');
+  const btnDjPortalLogout = document.getElementById('btn-dj-portal-logout');
 
   const djControlsSection = document.getElementById('dj-controls-section');
+  const btnDjLogout = document.getElementById('btn-dj-logout');
   const roleBadge = document.getElementById('role-badge');
   
   const adminApprovalPanel = document.getElementById('admin-approval-panel');
@@ -100,6 +93,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const labelMicVol = document.getElementById('label-mic-vol');
   const btnDucking = document.getElementById('btn-ducking');
 
+  // Modals
+  const loginModal = document.getElementById('login-modal');
+  const loginUserInput = document.getElementById('login-user-input');
+  const loginPassInput = document.getElementById('login-pass-input');
+  const loginBtnConfirm = document.getElementById('login-btn-confirm');
+  const loginBtnCancel = document.getElementById('login-btn-cancel');
+  const loginError = document.getElementById('login-error');
+
   const registerModal = document.getElementById('register-modal');
   const regUserInput = document.getElementById('reg-user-input');
   const regPassInput = document.getElementById('reg-pass-input');
@@ -119,140 +120,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let isDucking = false;
   let previousMusicVol = 80;
   let playlist = [];
-
-  // ========================================================
-  // 🔐 ตรรกะล็อกอิน MSN Gateway (Sign-In Logic)
-  // ========================================================
-  function enterMainApp(role, name) {
-    myRole = role;
-    myDJName = name;
-    if (usernameInput) usernameInput.value = name;
-    if (userOnlineStatus && authInitialStatus) userOnlineStatus.value = authInitialStatus.value;
-
-    msnAuthGateway.classList.add('hide');
-    mainAppWindow.classList.remove('hide');
-
-    if (role === 'admin') {
-      if (djPortalSection) djPortalSection.classList.add('hide');
-      if (djControlsSection) djControlsSection.classList.remove('hide');
-      if (roleBadge) {
-        roleBadge.textContent = "👑 Super Admin";
-        roleBadge.style.background = "#fee2e2";
-        roleBadge.style.color = "#991b1b";
-        roleBadge.style.borderColor = "#ef4444";
-      }
-      if (adminApprovalPanel) adminApprovalPanel.classList.remove('hide');
-      if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.remove('hide');
-      if (adminBannedUsersBox) adminBannedUsersBox.classList.remove('hide');
-    } else if (role === 'dj_member') {
-      if (djPortalSection) djPortalSection.classList.remove('hide');
-      if (djPortalName) djPortalName.textContent = name;
-    } else if (role === 'dj') {
-      if (djPortalSection) djPortalSection.classList.add('hide');
-      if (djControlsSection) djControlsSection.classList.remove('hide');
-      if (roleBadge) {
-        roleBadge.textContent = `🎧 DJ ${name}`;
-        roleBadge.style.background = "#fef08a";
-        roleBadge.style.color = "#713f12";
-        roleBadge.style.borderColor = "#ca8a04";
-      }
-    }
-    renderPlaylist();
-  }
-
-  function handleMSNSignIn() {
-    const username = authUsername.value.trim();
-    const password = authPassword.value.trim();
-
-    if (!username) {
-      authErrorBanner.textContent = "กรุณาระบุชื่อผู้ใช้งาน หรือ ชื่อเล่น!";
-      authErrorBanner.classList.remove('hide');
-      return;
-    }
-
-    // หากมีการกรอกรหัสผ่าน ตรวจสอบสิทธิ์ DJ หรือ Super Admin ผ่านเซิร์ฟเวอร์
-    if (password) {
-      socket.emit('auth-login', { username, password }, (res) => {
-        if (res.success) {
-          if (authRemember.checked) {
-            localStorage.setItem('msn_saved_auth', JSON.stringify({ user: username, pass: password, status: authInitialStatus.value }));
-          }
-          enterMainApp(res.role, res.name);
-        } else {
-          authErrorBanner.textContent = res.message;
-          authErrorBanner.classList.remove('hide');
-        }
-      });
-    } else {
-      // เข้าใช้งานในฐานะผู้ฟังทั่วไป (Listener)
-      if (authRemember.checked) {
-        localStorage.setItem('msn_saved_auth', JSON.stringify({ user: username, pass: '', status: authInitialStatus.value }));
-      }
-      enterMainApp('listener', username);
-    }
-  }
-
-  btnMsnSignin.onclick = handleMSNSignIn;
-  authUsername.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleMSNSignIn(); });
-  authPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleMSNSignIn(); });
-
-  // ตรวจสอบข้อมูลล็อกอินที่บันทึกไว้ใน LocalStorage
-  const savedAuth = localStorage.getItem('msn_saved_auth');
-  if (savedAuth) {
-    try {
-      const parsed = JSON.parse(savedAuth);
-      authUsername.value = parsed.user || '';
-      authPassword.value = parsed.pass || '';
-      if (parsed.status && authInitialStatus) authInitialStatus.value = parsed.status;
-
-      if (parsed.pass) {
-        socket.emit('auth-login', { username: parsed.user, password: parsed.pass }, (res) => {
-          if (res.success) enterMainApp(res.role, res.name);
-        });
-      } else if (parsed.user) {
-        enterMainApp('listener', parsed.user);
-      }
-    } catch(e) {}
-  }
-
-  // ออกจากระบบ
-  btnAppLogout.onclick = () => {
-    if (confirm("ต้องการลงชื่อออกจากระบบ MSN ใช่หรือไม่?")) {
-      if (isShowLive) socket.emit('dj-end-show');
-      localStorage.removeItem('msn_saved_auth');
-      window.location.reload();
-    }
-  };
-
-  // ลงทะเบียนดีเจจากหน้าแรก
-  linkOpenDjReg.onclick = () => {
-    regUserInput.value = ''; regPassInput.value = ''; 
-    if (regError) regError.classList.add('hide');
-    registerModal.classList.remove('hide'); 
-    regUserInput.focus();
-  };
-  regBtnCancel.onclick = () => registerModal.classList.add('hide');
-
-  regBtnConfirm.onclick = () => {
-    const username = regUserInput.value.trim(), password = regPassInput.value.trim();
-    if (!username || !password) {
-      regError.textContent = "กรุณากรอกชื่อและรหัสผ่านให้ครบถ้วน";
-      regError.classList.remove('hide');
-      return;
-    }
-    socket.emit('dj-register', { username, password }, (res) => {
-      if (res.success) {
-        alert(res.message);
-        registerModal.classList.add('hide');
-        authUsername.value = username;
-        authPassword.value = password;
-        authPassword.focus();
-      } else {
-        regError.textContent = res.message;
-        regError.classList.remove('hide');
-      }
-    });
-  };
 
   // ==========================================
   // 🎥 ระบบเล่น YouTube แบบ Robust Direct Embed
@@ -384,8 +251,28 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // 🚪 Modal ขอเพลง
+  // 🚪 ระบบ Modal และคำสั่ง
   // ==========================================
+  if (btnOpenLoginModal && loginModal) {
+    btnOpenLoginModal.onclick = () => {
+      loginUserInput.value = ''; loginPassInput.value = ''; 
+      if (loginError) loginError.classList.add('hide');
+      loginModal.classList.remove('hide'); 
+      loginUserInput.focus();
+    };
+  }
+  if (loginBtnCancel && loginModal) loginBtnCancel.onclick = () => loginModal.classList.add('hide');
+
+  if (btnOpenRegisterModal && registerModal) {
+    btnOpenRegisterModal.onclick = () => {
+      regUserInput.value = ''; regPassInput.value = ''; 
+      if (regError) regError.classList.add('hide');
+      registerModal.classList.remove('hide'); 
+      regUserInput.focus();
+    };
+  }
+  if (regBtnCancel && registerModal) regBtnCancel.onclick = () => registerModal.classList.add('hide');
+
   if (btnOpenRequestModal && requestModal) {
     btnOpenRequestModal.onclick = () => {
       reqSongInput.value = ''; reqNoteInput.value = '';
@@ -458,8 +345,111 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // 👑 Admin Approvals & Queue
+  // 🔐 ระบบสมัคร / ล็อกอินสิทธิ์
   // ==========================================
+  if (usernameInput) {
+    if (localStorage.getItem('saved_username')) usernameInput.value = localStorage.getItem('saved_username');
+    usernameInput.addEventListener('input', () => localStorage.setItem('saved_username', usernameInput.value.trim()));
+  }
+
+  if (regBtnConfirm) {
+    regBtnConfirm.onclick = () => {
+      const username = regUserInput.value.trim(), password = regPassInput.value.trim();
+      if (!username || !password) {
+        regError.textContent = "กรุณากรอกชื่อและรหัสผ่านให้ครบถ้วน";
+        regError.classList.remove('hide');
+        return;
+      }
+      socket.emit('dj-register', { username, password }, (res) => {
+        if (res.success) {
+          alert(res.message);
+          registerModal.classList.add('hide');
+          loginUserInput.value = username;
+          loginModal.classList.remove('hide');
+          loginPassInput.focus();
+        } else {
+          regError.textContent = res.message;
+          regError.classList.remove('hide');
+        }
+      });
+    };
+  }
+
+  function executeLogin() {
+    const username = loginUserInput.value.trim(), password = loginPassInput.value.trim();
+    if (!password) {
+      loginError.textContent = "กรุณากรอกรหัสผ่าน!";
+      loginError.classList.remove('hide');
+      return;
+    }
+
+    socket.emit('auth-login', { username, password }, (res) => {
+      if (res.success) {
+        loginModal.classList.add('hide');
+        myRole = res.role;
+        myDJName = res.name;
+        localStorage.setItem('auth_session', JSON.stringify({ user: username, pass: password }));
+
+        if (res.role === 'admin') {
+          djLoginSection.classList.add('hide');
+          djPortalSection.classList.add('hide');
+          djControlsSection.classList.remove('hide');
+          roleBadge.textContent = "👑 Super Admin";
+          roleBadge.style.background = "#fee2e2";
+          roleBadge.style.color = "#991b1b";
+          roleBadge.style.borderColor = "#ef4444";
+          adminApprovalPanel.classList.remove('hide');
+          if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.remove('hide');
+          if (adminBannedUsersBox) adminBannedUsersBox.classList.remove('hide');
+        } else if (res.role === 'dj_member') {
+          djLoginSection.classList.add('hide');
+          djPortalSection.classList.remove('hide');
+          djPortalName.textContent = res.name;
+          usernameInput.value = res.name;
+        }
+        renderPlaylist();
+      } else {
+        loginError.textContent = res.message;
+        loginError.classList.remove('hide');
+      }
+    });
+  }
+
+  if (loginBtnConfirm) loginBtnConfirm.onclick = () => executeLogin();
+  if (loginPassInput) loginPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeLogin(); });
+
+  const savedSession = localStorage.getItem('auth_session');
+  if (savedSession) {
+    try {
+      const parsed = JSON.parse(savedSession);
+      socket.emit('auth-login', { username: parsed.user, password: parsed.pass }, (res) => {
+        if (res.success) {
+          myRole = res.role;
+          myDJName = res.name;
+          if (res.role === 'admin') {
+            djLoginSection.classList.add('hide');
+            djControlsSection.classList.remove('hide');
+            roleBadge.textContent = "👑 Super Admin";
+            roleBadge.style.background = "#fee2e2";
+            roleBadge.style.color = "#991b1b";
+            roleBadge.style.borderColor = "#ef4444";
+            adminApprovalPanel.classList.remove('hide');
+            if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.remove('hide');
+            if (adminBannedUsersBox) adminBannedUsersBox.classList.remove('hide');
+          } else if (res.role === 'dj_member') {
+            djLoginSection.classList.add('hide');
+            djPortalSection.classList.remove('hide');
+            djPortalName.textContent = res.name;
+            usernameInput.value = res.name;
+          }
+          renderPlaylist();
+        } else {
+          localStorage.removeItem('auth_session');
+        }
+      });
+    } catch(e) {}
+  }
+
   if (btnRequestToLive) btnRequestToLive.onclick = () => socket.emit('dj-request-queue');
   socket.on('dj-queue-waiting', () => {
     if (btnRequestToLive) btnRequestToLive.classList.add('hide');
@@ -513,9 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
     registeredDjsList.querySelectorAll('.del-dj-btn').forEach(btn => {
       btn.onclick = () => {
         const target = btn.getAttribute('data-name');
-        if (confirm(`ต้องการลบบัญชีดีเจ "${target}" ออกจากระบบใช่หรือไม่?`)) {
-          socket.emit('admin-delete-dj', target);
-        }
+        if (confirm(`ต้องการลบบัญชีดีเจ "${target}" ออกจากระบบใช่หรือไม่?`)) socket.emit('admin-delete-dj', target);
       };
     });
   });
@@ -545,7 +533,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('dj-approved', (djName) => {
-    enterMainApp('dj', djName);
+    myRole = 'dj';
+    myDJName = djName;
+    if (djPortalSection) djPortalSection.classList.add('hide');
+    if (djControlsSection) djControlsSection.classList.remove('hide');
+    if (roleBadge) {
+      roleBadge.textContent = `🎧 DJ ${djName}`;
+      roleBadge.style.background = "#fef08a";
+      roleBadge.style.color = "#713f12";
+      roleBadge.style.borderColor = "#ca8a04";
+    }
+    if (adminApprovalPanel) adminApprovalPanel.classList.add('hide');
+    if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.add('hide');
+    renderPlaylist();
     alert(`🎉 แอดมินอนุมัติให้คุณ ${djName} ขึ้นจัดรายการสดแล้ว!`);
   });
 
@@ -554,6 +554,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (djPortalWaitingText) djPortalWaitingText.classList.add('hide');
     alert("❌ แอดมินปฏิเสธคำขอขึ้นจัดรายการในขณะนี้");
   });
+
+  function performLogout() {
+    if (confirm("ต้องการออกจากระบบใช่หรือไม่?")) {
+      if (isShowLive) socket.emit('dj-end-show');
+      localStorage.removeItem('auth_session');
+      window.location.reload();
+    }
+  }
+
+  if (btnDjLogout) btnDjLogout.onclick = performLogout;
+  if (btnDjPortalLogout) btnDjPortalLogout.onclick = performLogout;
 
   // ==========================================
   // ✨ Glitter & Reactions & Nudge

@@ -27,9 +27,7 @@ let djQueue = [];
 let onlineUsersCount = 0;
 let currentVolumes = { music: 0.8, mic: 1.0 };
 
-// ----------------------------------------------------
-// 🇹🇭 Helper จัดการเวลาและวันที่ประเทศไทย (GMT+7)
-// ----------------------------------------------------
+// ฟังก์ชันเวลาและวันที่ประเทศไทย (GMT+7)
 function getThaiTime() {
   return new Date().toLocaleTimeString('th-TH', {
     timeZone: 'Asia/Bangkok',
@@ -41,7 +39,7 @@ function getThaiTime() {
 
 function getTodayString() {
   const d = new Date();
-  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }); // คืนค่า YYYY-MM-DD ตามเวลาไทย
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
 }
 let currentDay = getTodayString();
 
@@ -104,7 +102,7 @@ function checkDayReset() {
   }
 }
 
-// ระบบ Sync Pulse ทุก 3 วินาที
+// ส่ง Sync Pulse ทุก 3 วินาที
 setInterval(() => {
   if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
     const currentSeconds = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
@@ -167,16 +165,14 @@ io.on('connection', (socket) => {
       text: data.text,
       style: data.style || {},
       role: socket.userRole || 'listener',
-      time: getThaiTime() // ใช้เวลาประเทศไทย GMT+7
+      time: getThaiTime()
     };
     chatHistory.push(newMsg);
     saveChatHistory();
     io.emit('chat-message', newMsg);
   });
 
-  // ----------------------------------------------------
-  // 🔨 ระบบเตะ (Kick) และ แบน (Ban)
-  // ----------------------------------------------------
+  // Moderation: Kick / Ban
   socket.on('admin-kick-user', (targetSocketId) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     const target = io.sockets.sockets.get(targetSocketId);
@@ -352,7 +348,7 @@ io.on('connection', (socket) => {
         if (info && info.title) songTitle = info.title;
       }
     } catch (err) {
-      console.error("YouTube oEmbed fetch error:", err.message);
+      console.error("YouTube oEmbed error:", err.message);
     }
 
     playlist.push({
