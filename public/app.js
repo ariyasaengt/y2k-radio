@@ -4,7 +4,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let myRole = 'listener';
   let myDJName = '';
   let isListeningToMain = false;
-  let activeTab = 'general'; // 'general' หรือ socketId สำหรับ Whisper
+  let activeTab = 'general';
+  let currentConfirmedNick = '';
 
   const mainAppWindow = document.getElementById('main-app-window');
   const stationStatus = document.getElementById('station-status');
@@ -158,6 +159,67 @@ document.addEventListener('DOMContentLoaded', () => {
   let playlist = [];
 
   // ========================================================
+  // 📱 Device Token Generator (นับผู้ชมจริงแยกคอมกับมือถือ)
+  // ========================================================
+  let visitorToken = localStorage.getItem('y2k_device_token');
+  if (!visitorToken) {
+    visitorToken = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
+    localStorage.setItem('y2k_device_token', visitorToken);
+  }
+  socket.emit('register-visitor', visitorToken);
+
+  // ========================================================
+  // 🚫 ระบบตรวจสอบและเปลี่ยนชื่อเล่น (ป้องกันชื่อซ้ำ)
+  // ========================================================
+  if (usernameInput) {
+    const savedName = localStorage.getItem('saved_username');
+    const initialName = savedName ? savedName : 'Guest_' + Math.floor(Math.random() * 899 + 100);
+    
+    socket.emit('check-or-set-username', initialName, (res) => {
+      if (res.success) {
+        usernameInput.value = res.name;
+        currentConfirmedNick = res.name;
+        localStorage.setItem('saved_username', res.name);
+      } else {
+        const altName = 'Guest_' + Math.floor(Math.random() * 8999 + 1000);
+        socket.emit('check-or-set-username', altName, (r2) => {
+          usernameInput.value = r2.name;
+          currentConfirmedNick = r2.name;
+          localStorage.setItem('saved_username', r2.name);
+        });
+      }
+    });
+
+    usernameInput.addEventListener('change', () => {
+      const wantName = usernameInput.value.trim();
+      if (!wantName) {
+        usernameInput.value = currentConfirmedNick;
+        return;
+      }
+      socket.emit('check-or-set-username', wantName, (res) => {
+        if (res.success) {
+          currentConfirmedNick = res.name;
+          usernameInput.value = res.name;
+          localStorage.setItem('saved_username', res.name);
+          showMsnToast("Profile", `เปลี่ยนชื่อเป็น "${res.name}" เรียบร้อยแล้ว!`);
+        } else {
+          alert(`⚠️ ${res.message}`);
+          usernameInput.value = currentConfirmedNick;
+          usernameInput.focus();
+        }
+      });
+    });
+  }
+
+  socket.on('name-conflict-alert', (msg) => {
+    alert(`⚠️ ${msg}`);
+    if (usernameInput) {
+      usernameInput.value = currentConfirmedNick;
+      usernameInput.focus();
+    }
+  });
+
+  // ========================================================
   // 🎨 Winamp Skin Switcher
   // ========================================================
   if (winampSkinSelect) {
@@ -172,9 +234,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // ========================================================
-  // 🍞 MSN Toast Notifications
-  // ========================================================
   function showMsnToast(title, message) {
     if (!msnToastContainer) return;
     const toast = document.createElement('div');
@@ -195,9 +254,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (hitCounterDigits) hitCounterDigits.textContent = String(hits).padStart(6, '0');
   });
 
-  // ========================================================
-  // 🎥 YouTube Robust ID Extraction (แก้ปัญหาเพิ่มลิสต์ไม่ได้)
-  // ========================================================
   function extractYouTubeID(url) {
     if (!url) return null;
     const cleanUrl = url.trim();
@@ -212,7 +268,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const url = djYtUrl.value.trim();
       if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
       const videoId = extractYouTubeID(url);
-      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง! ตรวจสอบลิงก์อีกครั้ง (เช่น https://youtu.be/... หรือ https://www.youtube.com/watch?v=...)");
+      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง!");
 
       socket.emit('dj-add-youtube-to-playlist', { videoId: videoId });
       djYtUrl.value = '';
@@ -220,9 +276,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ========================================================
+  // ==========================================
   // 🎥 YouTube Direct Embed
-  // ========================================================
+  // ==========================================
   let currentYtVideoId = null;
   let ytTrackDuration = 0;
   let ytTrackElapsed = 0;
@@ -335,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ========================================================
-  // ✨ MSN Winks System (แอนิเมชันเต็มจอ)
+  // ✨ MSN Winks System
   // ========================================================
   if (btnWinksMenu && winksPicker) {
     btnWinksMenu.onclick = (e) => {
@@ -420,7 +476,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================
-  // ⚔️ Music Battle (โพลประชันเพลงสด)
+  // ⚔️ Music Battle
   // ========================================================
   if (btnOpenBattleModal && battleModal) {
     btnOpenBattleModal.onclick = () => battleModal.classList.remove('hide');
@@ -453,7 +509,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnVoteB) btnVoteB.onclick = () => socket.emit('cast-vote', 'B');
 
   // ========================================================
-  // 💌 กล่องสารภาพรัก / ข้อความลับ
+  // 💌 Secret Dedication
   // ========================================================
   if (btnOpenSecretModal && secretModal) {
     btnOpenSecretModal.onclick = () => secretModal.classList.remove('hide');
@@ -470,7 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================
-  // 🎙️ บันทึกรายการสด (Broadcast Recorder)
+  // 🎙️ Broadcast Recorder
   // ========================================================
   let showMediaRecorder = null;
   let recordedAudioChunks = [];
@@ -513,7 +569,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================
-  // 💬 แท็บแชท & MSN Private Whisper
+  // 💬 Tabs & Whisper
   // ========================================================
   function switchChatTab(tabName) {
     activeTab = tabName;
@@ -527,9 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   chatTabsHeader.addEventListener('click', (e) => {
     const tabEl = e.target.closest('.tab');
-    if (tabEl) {
-      switchChatTab(tabEl.getAttribute('data-tab'));
-    }
+    if (tabEl) switchChatTab(tabEl.getAttribute('data-tab'));
   });
 
   function createWhisperTab(targetSocketId, targetUser) {
@@ -570,7 +624,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ถอดรหัสสีสไตล์ MSN Plus! เช่น ·$4แดง ·$1ดำ
   function parseMSNPlusCodes(text) {
     const colorMap = {
       '0': '#ffffff', '1': '#000000', '2': '#000080', '3': '#008000',
@@ -628,7 +681,6 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     `;
 
-    // คลิกที่ชื่อเพื่อเปิด Whisper แท็บกระซิบส่วนตัว
     const userClickable = bubble.querySelector('.user-clickable');
     if (userClickable) {
       userClickable.onclick = () => {
@@ -672,7 +724,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!text) return;
     clearTimeout(typingTimeout); socket.emit('typing-stop');
 
-    // ถ้ากำลังอยู่ในแท็บ Whisper ให้ส่งเป็นแชทส่วนตัว
     if (activeTab !== 'general') {
       const activeTabEl = document.querySelector(`.tab[data-tab="${activeTab}"]`);
       const partnerName = activeTabEl ? activeTabEl.textContent.replace('💬 ', '') : 'User';
@@ -693,7 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } });
 
   // ========================================================
-  // 🔊 Audio Engine & SFX (Scratch & Tape)
+  // 🔊 Audio Engine
   // ========================================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
   let nextMicPlayTime = 0;
@@ -771,14 +822,12 @@ document.addEventListener('DOMContentLoaded', () => {
         gain.gain.setValueAtTime(0.4, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
         osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.25);
       } else if (type === 'scratch') {
-        // DJ Vinyl Scratch Effect
         osc.type = 'sawtooth'; osc.frequency.setValueAtTime(800, ctx.currentTime);
         osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.08);
         osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.16);
         gain.gain.setValueAtTime(0.35, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
         osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.22);
       } else if (type === 'tape') {
-        // Tape Stop Effect
         osc.type = 'sine'; osc.frequency.setValueAtTime(400, ctx.currentTime);
         osc.frequency.linearRampToValueAtTime(40, ctx.currentTime + 0.45);
         gain.gain.setValueAtTime(0.35, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
@@ -787,9 +836,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e){}
   });
 
-  // ==========================================
-  // ⏱️ ควบคุมปุ่มฟังสถานีหลัก
-  // ==========================================
   function formatTime(s) { return `${Math.floor(s/60).toString().padStart(2, '0')}:${Math.floor(s%60).toString().padStart(2, '0')}`; }
 
   function startListeningMainStation() {
@@ -1021,9 +1067,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // ========================================================
-  // ⚙️ Modals & Auth Events
-  // ========================================================
+  // Modals & Auth Events
   if (btnOpenLoginModal && loginModal) {
     btnOpenLoginModal.onclick = () => {
       loginUserInput.value = ''; loginPassInput.value = ''; 
@@ -1106,11 +1150,6 @@ document.addEventListener('DOMContentLoaded', () => {
       backupAudioPlayer.load();
       backupAudioPlayer.play().catch(() => {});
     });
-  }
-
-  if (usernameInput) {
-    if (localStorage.getItem('saved_username')) usernameInput.value = localStorage.getItem('saved_username');
-    usernameInput.addEventListener('input', () => localStorage.setItem('saved_username', usernameInput.value.trim()));
   }
 
   if (regBtnConfirm) {
@@ -1327,7 +1366,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnDjLogout) btnDjLogout.onclick = performLogout;
   if (btnDjPortalLogout) btnDjPortalLogout.onclick = performLogout;
 
-  // Glitter & Heart Reactions
   const glitterCanvas = document.getElementById('glitter-canvas');
   const gCtx = glitterCanvas ? glitterCanvas.getContext('2d') : null;
   let particles = [];

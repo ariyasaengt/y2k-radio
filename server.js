@@ -25,23 +25,26 @@ let djQueue = [];
 let onlineUsersCount = 0;
 let currentVolumes = { music: 0.8, mic: 1.0 };
 
+// จัดเก็บรายชื่อผู้ใช้ที่กำลังออนไลน์ (socket.id => nickname)
+const activeUsers = new Map();
+
 // ----------------------------------------------------
-// 📊 ระบบสถิติผู้เข้าชมจริง (Unique Visitors Database)
+// 📊 สถิติผู้เข้าชมจริง (Unique Device Token)
 // ----------------------------------------------------
 const STATS_FILE = path.join(__dirname, 'stats.json');
-let siteStats = { totalHits: 0, visitedIps: [] };
+let siteStats = { totalHits: 0, visitedTokens: [] };
 
 function loadSiteStats() {
   try {
     if (fs.existsSync(STATS_FILE)) {
       siteStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf-8'));
-      if (!Array.isArray(siteStats.visitedIps)) siteStats.visitedIps = [];
+      if (!Array.isArray(siteStats.visitedTokens)) siteStats.visitedTokens = [];
     } else {
-      siteStats = { totalHits: 1, visitedIps: [] };
+      siteStats = { totalHits: 0, visitedTokens: [] };
       saveSiteStats();
     }
   } catch (err) {
-    siteStats = { totalHits: 1, visitedIps: [] };
+    siteStats = { totalHits: 0, visitedTokens: [] };
   }
 }
 
@@ -182,17 +185,43 @@ io.on('connection', (socket) => {
   onlineUsersCount++;
   io.emit('online-users-count', onlineUsersCount);
 
-  // ตรวจสอบและนับเฉพาะผู้เข้าชมจริง (Unique Visitor)
-  if (clientIp && !siteStats.visitedIps.includes(clientIp)) {
-    siteStats.visitedIps.push(clientIp);
-    siteStats.totalHits = siteStats.visitedIps.length;
-    saveSiteStats();
-  }
-  
-  // ส่งจำนวนคนจริงที่เคยเข้าชมทั้งหมดไปแสดงบนหน้าจอ
-  socket.emit('hit-counter-update', siteStats.totalHits || 1);
-  checkDayReset();
+  // ระบบนับ Device Token แยกคอมกับมือถือ
+  socket.on('register-visitor', (visitorToken) => {
+    if (visitorToken && !siteStats.visitedTokens.includes(visitorToken)) {
+      siteStats.visitedTokens.push(visitorToken);
+      siteStats.totalHits = siteStats.visitedTokens.length;
+      saveSiteStats();
+      io.emit('hit-counter-update', siteStats.totalHits);
+    } else {
+      socket.emit('hit-counter-update', siteStats.totalHits || 1);
+    }
+  });
 
+  // ----------------------------------------------------
+  // 🚫 ระบบตรวจสอบและจองชื่อผู้ใช้ (ป้องกันชื่อซ้ำ)
+  // ----------------------------------------------------
+  socket.on('check-or-set-username', (newUsername, callback) => {
+    const cleanName = (newUsername || '').trim();
+    if (!cleanName) {
+      return callback({ success: false, message: "กรุณาระบุชื่อเล่นของคุณ!" });
+    }
+
+    // ตรวจสอบว่ามีคนอื่นใช้ชื่อนี้อยู่แล้วหรือไม่ (ไม่นับตัวเอง)
+    for (const [sId, name] of activeUsers.entries()) {
+      if (sId !== socket.id && name.toLowerCase() === cleanName.toLowerCase()) {
+        return callback({ 
+          success: false, 
+          message: `ชื่อ "${cleanName}" มีผู้ใช้งานอยู่ในห้องสนทนาแล้ว กรุณาใช้ชื่ออื่น!` 
+        });
+      }
+    }
+
+    activeUsers.set(socket.id, cleanName);
+    socket.currentNick = cleanName;
+    callback({ success: true, name: cleanName });
+  });
+
+  checkDayReset();
   socket.emit('dj-status-update', isDJLive);
 
   let trackToSend = { ...currentTrack };
@@ -219,10 +248,23 @@ io.on('connection', (socket) => {
 
   socket.on('chat-message', (data) => {
     checkDayReset();
+    const cleanUser = (data.user || 'Guest').trim();
+
+    // ป้องกันการส่งข้อความหากแอบแก้ชื่อซ้ำ
+    for (const [sId, name] of activeUsers.entries()) {
+      if (sId !== socket.id && name.toLowerCase() === cleanUser.toLowerCase()) {
+        socket.emit('name-conflict-alert', `ชื่อ "${cleanUser}" ซ้ำกับผู้ใช้งานคนอื่น กรุณาเปลี่ยนชื่อก่อนส่งข้อความ!`);
+        return;
+      }
+    }
+
+    activeUsers.set(socket.id, cleanUser);
+    socket.currentNick = cleanUser;
+
     const newMsg = {
       id: Date.now() + Math.random().toString(36).substring(2, 5),
       senderSocketId: socket.id,
-      user: data.user || 'Guest',
+      user: cleanUser,
       status: data.status || '',
       text: data.text,
       style: data.style || {},
@@ -251,7 +293,7 @@ io.on('connection', (socket) => {
 
   socket.on('send-wink', (winkType) => {
     io.emit('receive-wink', {
-      user: socket.djName || 'ใครบางคน',
+      user: socket.currentNick || socket.djName || 'ใครบางคน',
       type: winkType
     });
   });
@@ -318,7 +360,7 @@ io.on('connection', (socket) => {
     if (target) {
       if (target.userRole === 'admin') return;
       const targetIp = getClientIp(target);
-      const targetName = target.djName || 'Guest';
+      const targetName = target.currentNick || target.djName || 'Guest';
 
       if (!bannedList.some(b => b.ip === targetIp)) {
         bannedList.push({
@@ -578,6 +620,7 @@ io.on('connection', (socket) => {
   socket.on('typing-stop', () => socket.broadcast.emit('user-typing', { isTyping: false }));
 
   socket.on('disconnect', () => {
+    activeUsers.delete(socket.id);
     onlineUsersCount = Math.max(0, onlineUsersCount - 1);
     io.emit('online-users-count', onlineUsersCount);
 

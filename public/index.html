@@ -13,12 +13,10 @@
   <div id="winks-overlay-container" class="winks-overlay hide"></div>
 
   <div id="main-app-window" class="desktop-wrap">
-    <!-- แถบซ้าย: สถานีวิทยุและดีเจ -->
     <aside class="window-pane side-bar">
       <div class="window-header">
         <span class="icon-flower">🌸</span>
         <span class="title">Radio Controller (Winamp Pro)</span>
-        <!-- เมนูเปลี่ยนสกิน Winamp -->
         <select id="winamp-skin-select" class="skin-dropdown" title="เปลี่ยนสกิน Winamp">
           <option value="theme-winamp-classic">⚡ Classic Dark</option>
           <option value="theme-y2k-aero">🍬 Y2K Aero Pink</option>
@@ -38,7 +36,7 @@
       </div>
 
       <div class="side-content">
-        <!-- Now Playing Winamp Skin -->
+        <!-- Winamp Chassis Player -->
         <div class="section-box winamp-chassis">
           <div class="section-title winamp-header-title">⚡ WINAMP AUDIO CONTROLLER ⚡</div>
           <div class="now-playing-box winamp-screen">
@@ -55,7 +53,6 @@
               <span id="track-time-total">00:00</span>
             </div>
 
-            <!-- Spectrum Visualizer -->
             <canvas id="visualizer-canvas" class="visualizer-bar" width="280" height="42"></canvas>
           </div>
           <div class="btn-group">
@@ -65,7 +62,7 @@
           </div>
         </div>
 
-        <!-- กล่อง Music Battle (โพลประชันเพลงสด) -->
+        <!-- Music Battle Box -->
         <div id="music-battle-box" class="section-box hide">
           <div class="section-title">⚔️ MUSIC BATTLE (โหวตเพลงสด)</div>
           <div id="poll-question" style="font-weight: bold; font-size: 11px; margin-bottom: 6px; color: #1e40af;">...</div>
@@ -75,7 +72,7 @@
           </div>
         </div>
 
-        <!-- ส่งของขวัญ -->
+        <!-- Gifts -->
         <div class="section-box">
           <div class="section-title">🎁 ส่งของขวัญเสมือนให้ดีเจ</div>
           <div class="sfx-grid">
@@ -86,7 +83,7 @@
           </div>
         </div>
 
-        <!-- Thai Radio Tuner -->
+        <!-- Thai Tuner -->
         <div class="section-box tuner-box">
           <div class="section-title">Thai Radio Tuner (คลื่นวิทยุไทยสด)</div>
           <select id="backup-station-select" class="y2k-select">
@@ -104,7 +101,7 @@
           <audio id="backup-audio-player" controls preload="none" style="width: 100%; height: 28px; margin-top: 6px;"></audio>
         </div>
 
-        <!-- Playlist Queue -->
+        <!-- Playlist -->
         <div class="section-box playlist-section">
           <div class="section-title">Playlist Queue</div>
           <ul id="playlist-container" class="playlist-list">
@@ -112,7 +109,7 @@
           </ul>
         </div>
 
-        <!-- แผงดีเจและแอดมิน -->
+        <!-- DJ Booth -->
         <div class="section-box dj-panel">
           <div class="section-title">Broadcast Booth</div>
           
@@ -137,7 +134,6 @@
               <button type="button" id="btn-dj-logout" class="y2k-btn logout-btn">🚪 ออกจากระบบ</button>
             </div>
 
-            <!-- บันทึกรายการสด & สร้าง Music Battle -->
             <div class="btn-group" style="margin-bottom: 6px;">
               <button id="btn-record-show" class="y2k-btn" style="flex: 1;">⏺️ บันทึกรายการสด</button>
               <button id="btn-open-battle-modal" class="y2k-btn" style="flex: 1;">⚔️ เปิดโหวตเพลง</button>
@@ -215,7 +211,7 @@
               </div>
 
               <div class="sfx-box">
-                <div class="sfx-title">📢 DJ Sound FX & Tape Scratch</div>
+                <div class="sfx-title">📢 DJ Sound FX & Scratch</div>
                 <div class="sfx-grid">
                   <button type="button" class="sfx-btn" data-sound="airhorn">📯 แตร Horn</button>
                   <button type="button" class="sfx-btn" data-sound="rimshot">🥁 ตึ่งโป๊ะ!</button>
@@ -250,7 +246,7 @@
         <div class="section-box y2k-badges-box">
           <div class="hit-counter-container">
             <span class="hit-label">VISITOR COUNT:</span>
-            <div id="hit-counter-digits" class="hit-digits">001337</div>
+            <div id="hit-counter-digits" class="hit-digits">000001</div>
           </div>
           <div class="badges-row">
             <span class="micro-badge winamp-badge">WINAMP 2.91</span>
@@ -261,7 +257,7 @@
       </div>
     </aside>
 
-    <!-- แถบขวา: ห้องแชท MSN Messenger Edition -->
+    <!-- Chat & Shoutbox -->
     <main class="window-pane chat-window">
       <div class="window-header">
         <span class="icon-bubble">💬</span>
@@ -287,7 +283,6 @@
         <span id="pinned-text" class="pinned-text"></span>
       </div>
 
-      <!-- แท็บห้องแชท (รองรับ Whisper Private Tabs) -->
       <div id="chat-tabs-header" class="chat-tab-bar">
         <div class="tab active" data-tab="general">General Room</div>
       </div>
@@ -311,8 +306,9 @@
             </div>
           </div>
 
+          <!-- ปุ่ม Winks ขนาดพอดีเป็นไอคอนเดี่ยว -->
           <div class="pop-wrapper">
-            <button type="button" id="btn-winks-menu" class="tool-btn" title="ส่ง MSN Winks แฟลชเต็มจอ">✨ Winks</button>
+            <button type="button" id="btn-winks-menu" class="tool-btn" title="ส่ง MSN Winks แฟลชเต็มจอ">✨</button>
             <div id="winks-picker" class="emoji-picker hide" style="width: 140px; grid-template-columns: 1fr;">
               <span data-wink="kiss">💋 จูบยักษ์ชนจอ</span>
               <span data-wink="bomb">💣 ระเบิดตู้ม</span>
@@ -349,7 +345,7 @@
     </main>
   </div>
 
-  <!-- Modal ขอเพลงปกติ -->
+  <!-- Modal ขอเพลง -->
   <div id="request-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -373,7 +369,7 @@
     </div>
   </div>
 
-  <!-- Modal สารภาพรัก / ข้อความลับ -->
+  <!-- Modal สารภาพรัก -->
   <div id="secret-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -397,7 +393,7 @@
     </div>
   </div>
 
-  <!-- Modal เปิดโหวตประชันเพลง (Music Battle) สำหรับดีเจ -->
+  <!-- Modal Music Battle -->
   <div id="battle-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -476,6 +472,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=40"></script>
 </body>
 </html>
