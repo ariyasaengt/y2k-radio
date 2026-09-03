@@ -1079,3 +1079,26 @@ body.theme-cyber-neon .lcd-text {
   #username, #userstatus { width: 100% !important; }
   #btn-send { width: 70px; }
 }
+
+/* แอนิเมชันแท็บกะพริบแจ้งเตือนข้อความเข้าแบบ MSN */
+.tab-unread {
+  background: linear-gradient(180deg, #fef08a 0%, #f97316 100%) !important;
+  color: #ffffff !important;
+  border-color: #ea580c !important;
+  animation: msnTabBlink 1s infinite alternate;
+}
+
+@keyframes msnTabBlink {
+  0% { background: #f97316; color: #fff; }
+  100% { background: #fdba74; color: #7c2d12; }
+}
+
+.tab-close-btn {
+  margin-left: 6px;
+  font-size: 10px;
+  color: #64748b;
+  cursor: pointer;
+}
+.tab-close-btn:hover {
+  color: #ef4444;
+}

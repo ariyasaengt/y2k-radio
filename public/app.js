@@ -159,7 +159,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let previousMusicVol = 80;
   let playlist = [];
 
-  // Device Token Generator
+  // Device Token
   let visitorToken = localStorage.getItem('y2k_device_token');
   if (!visitorToken) {
     visitorToken = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
@@ -275,6 +275,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let currentYtVideoId = null;
   let ytTrackDuration = 0;
   let ytTrackElapsed = 0;
+  let trackTimerInterval = null;
   const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
 
   function sendIframeCommand(func, args = []) {
@@ -384,7 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ========================================================
-  // 🎵 จัดการคิวเพลงในหน้าต่างขวามือ (Playlist Queue Window)
+  // 🎵 จัดการคิวเพลงด้านขวา
   // ========================================================
   function renderPlaylist() {
     if (!playlistContainer) return;
@@ -519,12 +520,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================
-  // 💬 แท็บแชท MSN (รองรับ Whisper)
+  // 💬 แท็บแชท MSN & Whisper Notifications
   // ========================================================
   function switchChatTab(tabName) {
     activeTab = tabName;
     document.querySelectorAll('#chat-tabs-header .tab').forEach(t => {
-      t.classList.toggle('active', t.getAttribute('data-tab') === tabName);
+      const isTarget = t.getAttribute('data-tab') === tabName;
+      t.classList.toggle('active', isTarget);
+      if (isTarget) {
+        t.classList.remove('tab-unread');
+      }
     });
     document.querySelectorAll('.tab-pane').forEach(p => {
       if (tabName === 'general') {
@@ -536,25 +541,42 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   chatTabsHeader.addEventListener('click', (e) => {
+    if (e.target.classList.contains('tab-close-btn')) {
+      e.stopPropagation();
+      const tabEl = e.target.closest('.tab');
+      const tName = tabEl.getAttribute('data-tab');
+      const pane = document.getElementById(`whisper-logs-${tName}`);
+      if (tabEl) tabEl.remove();
+      if (pane) pane.remove();
+      switchChatTab('general');
+      return;
+    }
+
     const tabEl = e.target.closest('.tab');
     if (tabEl) switchChatTab(tabEl.getAttribute('data-tab'));
   });
 
-  function createWhisperTab(targetSocketId, targetUser) {
+  function createWhisperTab(targetSocketId, targetUser, shouldSwitch = false) {
     let existingTab = document.querySelector(`.tab[data-tab="${targetSocketId}"]`);
     if (!existingTab) {
       const newTab = document.createElement('div');
       newTab.className = 'tab';
       newTab.setAttribute('data-tab', targetSocketId);
-      newTab.textContent = `💬 ${targetUser}`;
+      newTab.innerHTML = `💬 ${targetUser} <span class="tab-close-btn" title="ปิดแท็บ">✕</span>`;
       chatTabsHeader.appendChild(newTab);
 
       const newPane = document.createElement('div');
       newPane.id = `whisper-logs-${targetSocketId}`;
       newPane.className = 'chat-logs tab-pane';
       document.getElementById('chat-logs-container').appendChild(newPane);
+      existingTab = newTab;
     }
-    switchChatTab(targetSocketId);
+
+    if (shouldSwitch) {
+      switchChatTab(targetSocketId);
+    } else if (activeTab !== targetSocketId) {
+      existingTab.classList.add('tab-unread');
+    }
   }
 
   socket.on('receive-whisper', (data) => {
@@ -562,7 +584,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatPartnerId = isMe ? activeTab : data.senderSocketId;
     const partnerName = isMe ? data.toUser : data.fromUser;
 
-    createWhisperTab(chatPartnerId, partnerName);
+    createWhisperTab(chatPartnerId, partnerName, isMe);
+
     const targetPane = document.getElementById(`whisper-logs-${chatPartnerId}`);
     if (targetPane) {
       const b = document.createElement('div');
@@ -575,6 +598,11 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       targetPane.appendChild(b);
       targetPane.scrollTop = targetPane.scrollHeight;
+    }
+
+    if (!isMe && activeTab !== chatPartnerId) {
+      playNotificationSound();
+      showMsnToast("ข้อความส่วนตัวใหม่", `💬 ${data.fromUser}: ${data.text.substring(0, 30)}...`);
     }
   });
 
@@ -640,7 +668,7 @@ document.addEventListener('DOMContentLoaded', () => {
       userClickable.onclick = () => {
         const sid = userClickable.getAttribute('data-sid');
         const name = userClickable.getAttribute('data-name');
-        if (sid && sid !== socket.id) createWhisperTab(sid, name);
+        if (sid && sid !== socket.id) createWhisperTab(sid, name, true);
       };
     }
 
@@ -680,7 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (activeTab !== 'general') {
       const activeTabEl = document.querySelector(`.tab[data-tab="${activeTab}"]`);
-      const partnerName = activeTabEl ? activeTabEl.textContent.replace('💬 ', '') : 'User';
+      const partnerName = activeTabEl ? activeTabEl.textContent.replace('💬 ', '').replace(' ✕', '').trim() : 'User';
       socket.emit('private-whisper', {
         targetSocketId: activeTab,
         fromUser: user,
