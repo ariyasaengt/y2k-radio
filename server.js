@@ -18,6 +18,7 @@ let currentBroadcaster = null;
 let isDJLive = false;
 let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
 let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨";
+let marqueeNotice = "✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • สเปกตรัมเต้นสดสไตล์ Winamp • พิมพ์โค้ดสี MSN Plus เช่น ·$4แดง ·$1 ·$3เขียว ได้เลย! ✨";
 let pinnedMessage = null;
 let playlist = [];
 let songRequests = [];
@@ -25,7 +26,6 @@ let djQueue = [];
 let onlineUsersCount = 0;
 let currentVolumes = { music: 0.8, mic: 1.0 };
 
-// จัดเก็บรายชื่อผู้ใช้ที่กำลังออนไลน์ (socket.id => nickname)
 const activeUsers = new Map();
 
 // ----------------------------------------------------
@@ -185,7 +185,6 @@ io.on('connection', (socket) => {
   onlineUsersCount++;
   io.emit('online-users-count', onlineUsersCount);
 
-  // ระบบนับ Device Token แยกคอมกับมือถือ
   socket.on('register-visitor', (visitorToken) => {
     if (visitorToken && !siteStats.visitedTokens.includes(visitorToken)) {
       siteStats.visitedTokens.push(visitorToken);
@@ -197,16 +196,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ----------------------------------------------------
-  // 🚫 ระบบตรวจสอบและจองชื่อผู้ใช้ (ป้องกันชื่อซ้ำ)
-  // ----------------------------------------------------
   socket.on('check-or-set-username', (newUsername, callback) => {
     const cleanName = (newUsername || '').trim();
     if (!cleanName) {
       return callback({ success: false, message: "กรุณาระบุชื่อเล่นของคุณ!" });
     }
 
-    // ตรวจสอบว่ามีคนอื่นใช้ชื่อนี้อยู่แล้วหรือไม่ (ไม่นับตัวเอง)
     for (const [sId, name] of activeUsers.entries()) {
       if (sId !== socket.id && name.toLowerCase() === cleanName.toLowerCase()) {
         return callback({ 
@@ -239,6 +234,7 @@ io.on('connection', (socket) => {
   }
 
   socket.emit('topic-update', todayTopic);
+  socket.emit('marquee-update', marqueeNotice);
   socket.emit('pinned-update', pinnedMessage);
   socket.emit('volume-update', currentVolumes);
   socket.emit('playlist-update', playlist);
@@ -246,11 +242,17 @@ io.on('connection', (socket) => {
   socket.emit('chat-history', chatHistory);
   if (activePoll) socket.emit('poll-update', activePoll);
 
+  // เปลี่ยนข้อความวิ่ง Marquee
+  socket.on('dj-set-marquee', (newNotice) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    marqueeNotice = (newNotice || '').trim() || "✨ ยินดีต้อนรับสู่ Y2K Retro Radio ✨";
+    io.emit('marquee-update', marqueeNotice);
+  });
+
   socket.on('chat-message', (data) => {
     checkDayReset();
     const cleanUser = (data.user || 'Guest').trim();
 
-    // ป้องกันการส่งข้อความหากแอบแก้ชื่อซ้ำ
     for (const [sId, name] of activeUsers.entries()) {
       if (sId !== socket.id && name.toLowerCase() === cleanUser.toLowerCase()) {
         socket.emit('name-conflict-alert', `ชื่อ "${cleanUser}" ซ้ำกับผู้ใช้งานคนอื่น กรุณาเปลี่ยนชื่อก่อนส่งข้อความ!`);

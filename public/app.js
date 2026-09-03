@@ -16,6 +16,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const winksOverlayContainer = document.getElementById('winks-overlay-container');
   const winampSkinSelect = document.getElementById('winamp-skin-select');
 
+  const marqueeText = document.getElementById('marquee-text');
+  const djMarqueeInput = document.getElementById('dj-marquee-input');
+  const btnSaveMarquee = document.getElementById('btn-save-marquee');
+
   const chatTabsHeader = document.getElementById('chat-tabs-header');
   const chatLogs = document.getElementById('chat-logs');
   const chatInput = document.getElementById('chat-message');
@@ -159,7 +163,22 @@ document.addEventListener('DOMContentLoaded', () => {
   let previousMusicVol = 80;
   let playlist = [];
 
-  // Device Token
+  // ========================================================
+  // ⏱️ ระบบจัดรูปแบบเวลา (รองรับระดับชั่วโมงและนาที)
+  // ========================================================
+  function formatTime(s) {
+    const totalSecs = Math.max(0, Math.floor(s || 0));
+    const hrs = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+
+    if (hrs > 0) {
+      return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  // Device Token Generator
   let visitorToken = localStorage.getItem('y2k_device_token');
   if (!visitorToken) {
     visitorToken = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
@@ -229,6 +248,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // อัปเดตข้อความวิ่ง Marquee
+  socket.on('marquee-update', (text) => {
+    if (marqueeText) marqueeText.textContent = text;
+  });
+
+  if (btnSaveMarquee && djMarqueeInput) {
+    btnSaveMarquee.onclick = () => {
+      const txt = djMarqueeInput.value.trim();
+      if (!txt) return alert("กรุณาพิมพ์ข้อความวิ่งก่อนบันทึก!");
+      socket.emit('dj-set-marquee', txt);
+      djMarqueeInput.value = '';
+      showMsnToast("Notice Updated", "อัปเดตข้อความวิ่งเรียบร้อยแล้ว!");
+    };
+  }
+
   function showMsnToast(title, message) {
     if (!msnToastContainer) return;
     const toast = document.createElement('div');
@@ -271,10 +305,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // YouTube Direct Embed
+  // ========================================================
+  // 🎥 YouTube Direct Embed & ตัวนับเวลารายการสดจริง
+  // ========================================================
   let currentYtVideoId = null;
-  let ytTrackDuration = 0;
-  let ytTrackElapsed = 0;
+  let onAirElapsed = 0;
+  let ytRealDuration = 0;
   let trackTimerInterval = null;
   const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
 
@@ -319,19 +355,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (trackTimerInterval) clearInterval(trackTimerInterval);
-    ytTrackElapsed = Math.floor(seekTo || 0);
-    ytTrackDuration = 240;
+    onAirElapsed = Math.floor(seekTo || 0);
+
+    if (trackTimeTotal && !ytRealDuration) {
+      trackTimeTotal.textContent = "LIVE";
+    }
 
     trackTimerInterval = setInterval(() => {
-      ytTrackElapsed++;
-      if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(ytTrackElapsed);
-      if (trackTimeTotal) trackTimeTotal.textContent = formatTime(ytTrackDuration);
-      if (trackProgressFill) trackProgressFill.style.width = `${Math.min(100, (ytTrackElapsed / ytTrackDuration) * 100)}%`;
+      onAirElapsed++;
+      if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(onAirElapsed);
 
-      if (ytTrackDuration > 0 && ytTrackElapsed >= ytTrackDuration) {
-        clearInterval(trackTimerInterval);
-        if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
-          playItemAtIndex(0);
+      if (trackProgressFill) {
+        if (ytRealDuration > 0) {
+          trackProgressFill.style.width = `${Math.min(100, (onAirElapsed / ytRealDuration) * 100)}%`;
+        } else {
+          trackProgressFill.style.width = `${(onAirElapsed % 60) * (100 / 60)}%`;
         }
       }
     }, 1000);
@@ -342,14 +380,16 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof e.data !== 'string') return;
       const data = JSON.parse(e.data);
       if (data.event === 'infoDelivery' && data.info) {
+        // รับความยาวจริงของคลิปจาก YouTube API (ไม่ว่าจะ 41 นาที หรือหลายชั่วโมง)
         if (data.info.duration && data.info.duration > 0) {
-          ytTrackDuration = Math.floor(data.info.duration);
-          if (trackTimeTotal) trackTimeTotal.textContent = formatTime(ytTrackDuration);
+          ytRealDuration = Math.floor(data.info.duration);
+          if (trackTimeTotal) trackTimeTotal.textContent = formatTime(ytRealDuration);
         }
         if (data.info.currentTime !== undefined) {
-          ytTrackElapsed = Math.floor(data.info.currentTime);
-          if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(ytTrackElapsed);
+          onAirElapsed = Math.floor(data.info.currentTime);
+          if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(onAirElapsed);
         }
+        // เมื่อคลิปจบลงจริง
         if (data.info.playerState === 0) {
           if (trackTimerInterval) clearInterval(trackTimerInterval);
           if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
@@ -362,8 +402,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('radio-sync-pulse', (data) => {
     if (currentYtVideoId === data.videoId) {
-      if (Math.abs(ytTrackElapsed - data.currentTime) > 3) {
-        ytTrackElapsed = Math.floor(data.currentTime);
+      if (Math.abs(onAirElapsed - data.currentTime) > 3) {
+        onAirElapsed = Math.floor(data.currentTime);
         sendIframeCommand('seekTo', [data.currentTime, true]);
       }
     }
@@ -377,6 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('dj-stop-youtube', () => {
     currentYtVideoId = null;
+    ytRealDuration = 0;
     if (ytScreenWrapper) {
       ytScreenWrapper.innerHTML = '';
       ytScreenWrapper.classList.add('hide');
@@ -385,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ========================================================
-  // 🎵 จัดการคิวเพลงด้านขวา
+  // 🎵 จัดการคิวเพลงในหน้าต่างขวามือ (Playlist Queue Window)
   // ========================================================
   function renderPlaylist() {
     if (!playlistContainer) return;
@@ -817,8 +858,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e){}
   });
 
-  function formatTime(s) { return `${Math.floor(s/60).toString().padStart(2, '0')}:${Math.floor(s%60).toString().padStart(2, '0')}`; }
-
   function startListeningMainStation() {
     initAudioContext();
     if (listenAudioCtx.state === 'suspended') listenAudioCtx.resume();
@@ -895,6 +934,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (trackTimerInterval) clearInterval(trackTimerInterval);
         const duration = audioBuffer.duration;
+        ytRealDuration = duration;
         if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
         let elapsed = 0;
         trackTimerInterval = setInterval(() => {

@@ -103,6 +103,29 @@ body, button, input, select, textarea {
   color: #1e293b;
 }
 
+/* แอนิเมชันแท็บกะพริบแจ้งเตือนข้อความเข้าแบบ MSN */
+.tab-unread {
+  background: linear-gradient(180deg, #fef08a 0%, #f97316 100%) !important;
+  color: #ffffff !important;
+  border-color: #ea580c !important;
+  animation: msnTabBlink 1s infinite alternate;
+}
+
+@keyframes msnTabBlink {
+  0% { background: #f97316; color: #fff; }
+  100% { background: #fdba74; color: #7c2d12; }
+}
+
+.tab-close-btn {
+  margin-left: 6px;
+  font-size: 10px;
+  color: #64748b;
+  cursor: pointer;
+}
+.tab-close-btn:hover {
+  color: #ef4444;
+}
+
 body {
   background: #0a246a url('https://web.archive.org/web/20091027110156/http://geocities.com/clipart/pbi/backgrounds/Generic/clouds.jpg') repeat;
   display: flex;
@@ -1078,27 +1101,4 @@ body.theme-cyber-neon .lcd-text {
   .input-row { flex-wrap: wrap; }
   #username, #userstatus { width: 100% !important; }
   #btn-send { width: 70px; }
-}
-
-/* แอนิเมชันแท็บกะพริบแจ้งเตือนข้อความเข้าแบบ MSN */
-.tab-unread {
-  background: linear-gradient(180deg, #fef08a 0%, #f97316 100%) !important;
-  color: #ffffff !important;
-  border-color: #ea580c !important;
-  animation: msnTabBlink 1s infinite alternate;
-}
-
-@keyframes msnTabBlink {
-  0% { background: #f97316; color: #fff; }
-  100% { background: #fdba74; color: #7c2d12; }
-}
-
-.tab-close-btn {
-  margin-left: 6px;
-  font-size: 10px;
-  color: #64748b;
-  cursor: pointer;
-}
-.tab-close-btn:hover {
-  color: #ef4444;
 }

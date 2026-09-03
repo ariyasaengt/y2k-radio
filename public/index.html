@@ -183,6 +183,15 @@
               </div>
             </div>
 
+            <!-- กล่องตั้งค่าข้อความวิ่ง Marquee สำหรับดีเจ/แอดมิน -->
+            <div class="topic-setter-box" style="margin-top: 6px;">
+              <span class="sub-label">📜 ข้อความวิ่งหัวเว็บ (Marquee):</span>
+              <div class="input-row">
+                <input type="text" id="dj-marquee-input" class="y2k-input flex-1" placeholder="พิมพ์ข้อความวิ่งใหม่...">
+                <button type="button" id="btn-save-marquee" class="y2k-btn">📢 อัปเดต</button>
+              </div>
+            </div>
+
             <div class="moderation-box">
               <span class="sub-label">📌 ปักหมุดประกาศแชท:</span>
               <div class="input-row">
@@ -261,7 +270,7 @@
       </div>
 
       <div class="marquee-ticker">
-        <marquee scrollamount="4" behavior="scroll" direction="left">
+        <marquee id="marquee-text" scrollamount="4" behavior="scroll" direction="left">
           ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • สเปกตรัมเต้นสดสไตล์ Winamp • พิมพ์โค้ดสี MSN Plus เช่น ·$4แดง ·$1 ·$3เขียว ได้เลย! ✨
         </marquee>
       </div>
@@ -487,6 +496,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=50"></script>
+  <script src="app.js?v=60"></script>
 </body>
 </html>
