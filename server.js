@@ -11,6 +11,7 @@ const io = new Server(server, { maxHttpBufferSize: 1e7 });
 app.set('trust proxy', true);
 app.use(express.static(path.join(__dirname, 'public')));
 
+// รหัสผ่าน Super Admin
 const ADMIN_SECRET_KEY = "0024252600";
 
 let adminSocketId = null;
@@ -27,53 +28,27 @@ let onlineUsersCount = 0;
 let currentVolumes = { music: 0.8, mic: 1.0 };
 
 // ----------------------------------------------------
-// 🤖 คลังเพลง Auto-DJ (เล่นวนเมื่อไม่มีดีเจสด)
+// 🇹🇭 Helper จัดการเวลาและวันที่ประเทศไทย (GMT+7)
 // ----------------------------------------------------
-const AUTO_DJ_PLAYLIST = [
-  { videoId: "mCQ_q6xZz2U", title: "Tata Young - Sexy Naughty Bitchy", artist: "Auto-DJ Y2K" },
-  { videoId: "bI_fL8J34gE", title: "D2B - ซ่าส์...(สั่นๆ)", artist: "Auto-DJ Y2K" },
-  { videoId: "5mYn9zTqF8w", title: "Clash - กอด", artist: "Auto-DJ Y2K" },
-  { videoId: "2mI3GfK0v1k", title: "Silly Fools - วัดใจ", artist: "Auto-DJ Y2K" },
-  { videoId: "zV4qL9d8X1w", title: "Bodyslam - ความเชื่อ", artist: "Auto-DJ Y2K" },
-  { videoId: "kJQP7kiw5Fk", title: "Despacito / Y2K Latin Pop Hits", artist: "Auto-DJ Y2K" }
-];
-let autoDjTimer = null;
-
-function runAutoDJ() {
-  if (isDJLive) return;
-  const pick = AUTO_DJ_PLAYLIST[Math.floor(Math.random() * AUTO_DJ_PLAYLIST.length)];
-  const startedAt = Date.now();
-  currentTrack = {
-    title: pick.title,
-    artist: "🤖 Auto-DJ (Auto-Pilot)",
-    duration: 240,
-    youtubeId: pick.videoId,
-    startedAt: startedAt
-  };
-  io.emit('track-update', currentTrack);
-  io.emit('play-youtube-track', { videoId: pick.videoId, title: pick.title, seekTo: 0 });
-
-  if (autoDjTimer) clearTimeout(autoDjTimer);
-  autoDjTimer = setTimeout(() => {
-    if (!isDJLive) runAutoDJ();
-  }, 245000);
-}
-
-// ----------------------------------------------------
-// 🚫 Bad Words Filter & ฐานข้อมูลผู้ใช้ที่ถูกแบน
-// ----------------------------------------------------
-const BAD_WORDS = ['ควย', 'เย็ด', 'เหี้ย', 'สัส', 'มึง', 'กู', 'ดอ', 'ห่า', 'ดอกทอง', 'สันดาน', 'ชิบหาย', 'ไอ้เวร'];
-function filterBadWords(text) {
-  let filtered = text;
-  BAD_WORDS.forEach(word => {
-    const reg = new RegExp(word, 'gi');
-    filtered = filtered.replace(reg, '***');
+function getThaiTime() {
+  return new Date().toLocaleTimeString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
   });
-  return filtered;
 }
 
+function getTodayString() {
+  const d = new Date();
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }); // คืนค่า YYYY-MM-DD ตามเวลาไทย
+}
+let currentDay = getTodayString();
+
+// ฐานข้อมูลผู้ใช้ที่ถูกแบน
 const BANNED_FILE = path.join(__dirname, 'banned_users.json');
 let bannedList = [];
+
 function loadBannedList() {
   try {
     if (fs.existsSync(BANNED_FILE)) bannedList = JSON.parse(fs.readFileSync(BANNED_FILE, 'utf-8'));
@@ -90,6 +65,7 @@ let chatHistory = [];
 
 const DJS_FILE = path.join(__dirname, 'djs_database.json');
 let registeredDJs = {};
+
 function loadRegisteredDJs() {
   try {
     if (fs.existsSync(DJS_FILE)) registeredDJs = JSON.parse(fs.readFileSync(DJS_FILE, 'utf-8'));
@@ -100,12 +76,6 @@ function saveRegisteredDJs() {
   try { fs.writeFileSync(DJS_FILE, JSON.stringify(registeredDJs, null, 2), 'utf-8'); } catch (err) {}
 }
 loadRegisteredDJs();
-
-function getTodayString() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-let currentDay = getTodayString();
 
 function loadChatHistory() {
   try {
@@ -134,9 +104,9 @@ function checkDayReset() {
   }
 }
 
-// ⏱️ Sync Pulse ทุก 3 วินาที
+// ระบบ Sync Pulse ทุก 3 วินาที
 setInterval(() => {
-  if (currentTrack.youtubeId && currentTrack.startedAt) {
+  if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
     const currentSeconds = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
     io.emit('radio-sync-pulse', {
       videoId: currentTrack.youtubeId,
@@ -151,16 +121,11 @@ function getClientIp(socket) {
   return socket.handshake.address || socket.conn.remoteAddress;
 }
 
-// เริ่มระบบ Auto-DJ ทันทีที่เซิร์ฟเวอร์เปิด
-setTimeout(() => {
-  if (!isDJLive) runAutoDJ();
-}, 2000);
-
 io.on('connection', (socket) => {
   const clientIp = getClientIp(socket);
 
   if (bannedList.some(b => b.ip === clientIp)) {
-    socket.emit('banned-notice', { reason: "คุณถูกระงับการเข้าใช้งานเนื่องจากทำผิดกฎระเบียบ" });
+    socket.emit('banned-notice', { reason: "คุณถูกระงับการเข้าใช้งานเนื่องจากทำผิดกฎระเบียบของสถานี" });
     socket.disconnect(true);
     return;
   }
@@ -172,12 +137,12 @@ io.on('connection', (socket) => {
   socket.emit('dj-status-update', isDJLive);
 
   let trackToSend = { ...currentTrack };
-  if (currentTrack.youtubeId && currentTrack.startedAt) {
+  if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
     trackToSend.seekTo = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
   }
   socket.emit('track-update', trackToSend);
 
-  if (currentTrack.youtubeId) {
+  if (isDJLive && currentTrack.youtubeId) {
     socket.emit('play-youtube-track', {
       videoId: currentTrack.youtubeId,
       title: currentTrack.title,
@@ -192,24 +157,17 @@ io.on('connection', (socket) => {
   socket.emit('requests-update', songRequests);
   socket.emit('chat-history', chatHistory);
 
-  // ----------------------------------------------------
-  // 💬 Chat พร้อมระบบเซ็นเซอร์คำหยาบ
-  // ----------------------------------------------------
   socket.on('chat-message', (data) => {
     checkDayReset();
-    const cleanText = filterBadWords(data.text || '');
-    const cleanStatus = filterBadWords(data.status || '');
-
     const newMsg = {
       id: Date.now() + Math.random().toString(36).substring(2, 5),
       senderSocketId: socket.id,
       user: data.user || 'Guest',
-      status: cleanStatus,
-      presence: data.presence || 'online',
-      text: cleanText,
+      status: data.status || '',
+      text: data.text,
       style: data.style || {},
       role: socket.userRole || 'listener',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: getThaiTime() // ใช้เวลาประเทศไทย GMT+7
     };
     chatHistory.push(newMsg);
     saveChatHistory();
@@ -217,42 +175,7 @@ io.on('connection', (socket) => {
   });
 
   // ----------------------------------------------------
-  // 🎁 ส่งของขวัญเสมือน (Virtual Gifts)
-  // ----------------------------------------------------
-  socket.on('send-virtual-gift', (giftData) => {
-    const giftMap = {
-      rose: { name: "ดอกกุหลาบ", icon: "🌹" },
-      vinyl: { name: "แผ่นเสียงทองคำ", icon: "📀" },
-      boba: { name: "ชานมไข่มุก", icon: "🥤" },
-      yadom: { name: "ยาดมโป๊ยเซียน", icon: "🌿" }
-    };
-    const gift = giftMap[giftData.giftId] || { name: "ของขวัญ", icon: "🎁" };
-    const sender = giftData.user || 'ผู้ฟังทางบ้าน';
-
-    io.emit('receive-gift-animation', {
-      sender: sender,
-      giftName: gift.name,
-      icon: gift.icon
-    });
-
-    const giftChatMsg = {
-      id: Date.now(),
-      senderSocketId: socket.id,
-      user: "🎁 Studio Gift",
-      status: "Special Event",
-      presence: 'online',
-      text: `คุณ ${sender} ได้มอบ ${gift.icon} [${gift.name}] ให้กับดีเจ! ✨`,
-      style: { bold: true, color: "#b45309" },
-      role: 'system',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    chatHistory.push(giftChatMsg);
-    saveChatHistory();
-    io.emit('chat-message', giftChatMsg);
-  });
-
-  // ----------------------------------------------------
-  // 🔨 Kick & Ban Moderation
+  // 🔨 ระบบเตะ (Kick) และ แบน (Ban)
   // ----------------------------------------------------
   socket.on('admin-kick-user', (targetSocketId) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
@@ -278,12 +201,12 @@ io.on('connection', (socket) => {
           ip: targetIp,
           username: targetName,
           reason: "ถูกระงับสิทธิ์การใช้งานโดยผู้ดูแลระบบ",
-          bannedAt: new Date().toLocaleString()
+          bannedAt: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
         });
         saveBannedList();
       }
 
-      target.emit('banned-notice', { reason: "คุณถูกแบนออกจากระบบอย่างถาวร" });
+      target.emit('banned-notice', { reason: "คุณถูกแบนออกจากระบบอย่างถาวรเนื่องจากสร้างความปั่นป่วน" });
       target.disconnect(true);
       io.emit('system-announcement', `🚫 [ระบบ] ผู้ใช้ "${targetName}" ถูกแบนออกจากสถานี`);
 
@@ -347,7 +270,7 @@ io.on('connection', (socket) => {
   socket.on('dj-request-queue', () => {
     if (socket.userRole !== 'dj_member') return;
     if (!djQueue.some(q => q.socketId === socket.id)) {
-      djQueue.push({ socketId: socket.id, username: socket.djName, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+      djQueue.push({ socketId: socket.id, username: socket.djName, time: getThaiTime() });
     }
     socket.emit('dj-queue-waiting');
     if (adminSocketId) io.to(adminSocketId).emit('admin-dj-queue-update', djQueue);
@@ -378,13 +301,9 @@ io.on('connection', (socket) => {
     io.to(adminSocketId).emit('admin-dj-queue-update', djQueue);
   });
 
-  // ----------------------------------------------------
-  // 🔴 Go Live / End Show (พร้อมสลับ Auto-DJ)
-  // ----------------------------------------------------
   socket.on('dj-start-show', () => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     isDJLive = true;
-    if (autoDjTimer) clearTimeout(autoDjTimer);
     currentBroadcaster = { socketId: socket.id, role: socket.userRole, username: socket.djName };
     io.emit('dj-status-update', true);
   });
@@ -397,11 +316,6 @@ io.on('connection', (socket) => {
     io.emit('dj-status-update', false);
     io.emit('track-update', currentTrack);
     io.emit('dj-stop-youtube');
-
-    // สลับกลับไปเปิด Auto-DJ ต่อทันที
-    setTimeout(() => {
-      if (!isDJLive) runAutoDJ();
-    }, 3000);
   });
 
   socket.on('dj-play-youtube', (ytData) => {
@@ -427,17 +341,26 @@ io.on('connection', (socket) => {
 
   socket.on('dj-add-youtube-to-playlist', async (item) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+
     let songTitle = "YouTube Audio";
     const ytUrl = `https://www.youtube.com/watch?v=${item.videoId}`;
+
     try {
       const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(ytUrl)}&format=json`);
       if (response.ok) {
         const info = await response.json();
         if (info && info.title) songTitle = info.title;
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error("YouTube oEmbed fetch error:", err.message);
+    }
 
-    playlist.push({ name: `▶ [YT] ${songTitle}`, type: 'youtube', videoId: item.videoId });
+    playlist.push({
+      name: `▶ [YT] ${songTitle}`,
+      type: 'youtube',
+      videoId: item.videoId
+    });
+
     io.emit('playlist-update', playlist);
   });
 
@@ -495,7 +418,7 @@ io.on('connection', (socket) => {
       user: reqData.user || 'ผู้ฟังทางบ้าน',
       song: reqData.song,
       note: reqData.note || '',
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: getThaiTime()
     };
     songRequests.push(item);
     io.emit('requests-update', songRequests);
@@ -510,11 +433,10 @@ io.on('connection', (socket) => {
       const announceMsg = {
         user: "🎧 Studio",
         status: "On Air",
-        presence: 'online',
         text: `รับคิวเพลง "${r.song}" ของคุณ ${r.user} เรียบร้อยแล้ว!`,
         style: { bold: true, color: "#b91c1c" },
         role: socket.userRole,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        time: getThaiTime()
       };
       chatHistory.push(announceMsg);
       saveChatHistory();
@@ -537,11 +459,10 @@ io.on('connection', (socket) => {
     if (currentBroadcaster && currentBroadcaster.socketId === socket.id) {
       isDJLive = false;
       currentBroadcaster = null;
+      currentTrack = { title: "ดีเจออฟไลน์", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
       io.emit('dj-status-update', false);
+      io.emit('track-update', currentTrack);
       io.emit('dj-stop-youtube');
-      setTimeout(() => {
-        if (!isDJLive) runAutoDJ();
-      }, 3000);
     }
   });
 });
