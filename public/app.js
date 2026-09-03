@@ -164,8 +164,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let playlist = [];
 
   // ========================================================
-  // ⏱️ ระบบจัดรูปแบบเวลา (รองรับระดับชั่วโมงและนาที)
+  // ⏱️ ตัวนับเวลารายการสด (Live Broadcast Duration Timer)
   // ========================================================
+  let liveBroadcastInterval = null;
+  let broadcastStartTime = null;
+
   function formatTime(s) {
     const totalSecs = Math.max(0, Math.floor(s || 0));
     const hrs = Math.floor(totalSecs / 3600);
@@ -306,12 +309,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================
-  // 🎥 YouTube Direct Embed & ตัวนับเวลารายการสดจริง
+  // 🎥 YouTube Direct Embed
   // ========================================================
   let currentYtVideoId = null;
-  let onAirElapsed = 0;
-  let ytRealDuration = 0;
-  let trackTimerInterval = null;
   const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
 
   function sendIframeCommand(func, args = []) {
@@ -353,26 +353,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (isListeningToMain && userstatusInput && (!userstatusInput.value || userstatusInput.value.startsWith('🎵 กำลังฟัง:'))) {
       userstatusInput.value = `🎵 กำลังฟัง: ${title.replace('▶ [YT] ', '')}`;
     }
-
-    if (trackTimerInterval) clearInterval(trackTimerInterval);
-    onAirElapsed = Math.floor(seekTo || 0);
-
-    if (trackTimeTotal && !ytRealDuration) {
-      trackTimeTotal.textContent = "LIVE";
-    }
-
-    trackTimerInterval = setInterval(() => {
-      onAirElapsed++;
-      if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(onAirElapsed);
-
-      if (trackProgressFill) {
-        if (ytRealDuration > 0) {
-          trackProgressFill.style.width = `${Math.min(100, (onAirElapsed / ytRealDuration) * 100)}%`;
-        } else {
-          trackProgressFill.style.width = `${(onAirElapsed % 60) * (100 / 60)}%`;
-        }
-      }
-    }, 1000);
   }
 
   window.addEventListener('message', (e) => {
@@ -380,18 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof e.data !== 'string') return;
       const data = JSON.parse(e.data);
       if (data.event === 'infoDelivery' && data.info) {
-        // รับความยาวจริงของคลิปจาก YouTube API (ไม่ว่าจะ 41 นาที หรือหลายชั่วโมง)
-        if (data.info.duration && data.info.duration > 0) {
-          ytRealDuration = Math.floor(data.info.duration);
-          if (trackTimeTotal) trackTimeTotal.textContent = formatTime(ytRealDuration);
-        }
-        if (data.info.currentTime !== undefined) {
-          onAirElapsed = Math.floor(data.info.currentTime);
-          if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(onAirElapsed);
-        }
-        // เมื่อคลิปจบลงจริง
         if (data.info.playerState === 0) {
-          if (trackTimerInterval) clearInterval(trackTimerInterval);
           if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
             playItemAtIndex(0);
           }
@@ -402,10 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('radio-sync-pulse', (data) => {
     if (currentYtVideoId === data.videoId) {
-      if (Math.abs(onAirElapsed - data.currentTime) > 3) {
-        onAirElapsed = Math.floor(data.currentTime);
-        sendIframeCommand('seekTo', [data.currentTime, true]);
-      }
+      sendIframeCommand('seekTo', [data.currentTime, true]);
     }
   });
 
@@ -417,12 +383,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('dj-stop-youtube', () => {
     currentYtVideoId = null;
-    ytRealDuration = 0;
     if (ytScreenWrapper) {
       ytScreenWrapper.innerHTML = '';
       ytScreenWrapper.classList.add('hide');
     }
-    if (trackTimerInterval) clearInterval(trackTimerInterval);
   });
 
   // ========================================================
@@ -767,7 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } });
 
   // ========================================================
-  // 🔊 Audio Engine & SFX
+  // 🎛️ Audio Engine & LED Segmented Block Visualizer
   // ========================================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
   let nextMicPlayTime = 0;
@@ -796,37 +760,82 @@ document.addEventListener('DOMContentLoaded', () => {
   const vCtx = vCanvas ? vCanvas.getContext('2d') : null;
 
   function startVisualizer() {
-    if (!vCtx || !analyserNode) return;
-    const bufferLength = analyserNode.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
+    if (!vCtx || !vCanvas) return;
 
-    function render() {
-      requestAnimationFrame(render);
-      analyserNode.getByteFrequencyData(dataArray);
-      vCtx.fillStyle = '#000000';
+    const numColumns = 18;       // จำนวนคอลัมน์คลื่นความถี่
+    const numRows = 16;          // จำนวนชั้นบล็อกไฟแนวตั้ง
+    const colGap = 3;            // ระยะห่างระหว่างคอลัมน์ (แนวนอน)
+    const rowGap = 2;            // ระยะห่างระหว่างก้อนไฟ (แนวตั้ง)
+    
+    const blockWidth = (vCanvas.width - (colGap * (numColumns - 1))) / numColumns;
+    const blockHeight = (vCanvas.height - (rowGap * (numRows - 1))) / numRows;
+
+    let simTick = 0;
+    const dataArray = analyserNode ? new Uint8Array(analyserNode.frequencyBinCount) : null;
+
+    function renderLED() {
+      requestAnimationFrame(renderLED);
+
+      // เคลียร์พื้นหลังสีม่วงเข้มโทนเรโทร
+      vCtx.fillStyle = '#18122B';
       vCtx.fillRect(0, 0, vCanvas.width, vCanvas.height);
 
-      const barWidth = (vCanvas.width / bufferLength) * 1.5;
-      let x = 0;
-
-      for (let i = 0; i < bufferLength; i++) {
-        const barHeight = (dataArray[i] / 255) * vCanvas.height;
-        const grad = vCtx.createLinearGradient(0, vCanvas.height, 0, 0);
-        grad.addColorStop(0, '#15803d');
-        grad.addColorStop(0.6, '#22c55e');
-        grad.addColorStop(0.85, '#eab308');
-        grad.addColorStop(1, '#ef4444');
-
-        vCtx.fillStyle = grad;
-        vCtx.fillRect(x, vCanvas.height - barHeight, barWidth - 1, barHeight);
-        if (barHeight > 4) {
-          vCtx.fillStyle = '#f87171';
-          vCtx.fillRect(x, vCanvas.height - barHeight - 1, barWidth - 1, 1);
+      let hasRealAudio = false;
+      if (analyserNode && dataArray) {
+        analyserNode.getByteFrequencyData(dataArray);
+        for (let i = 0; i < 16; i++) {
+          if (dataArray[i] > 10) { hasRealAudio = true; break; }
         }
-        x += barWidth;
+      }
+
+      simTick += 0.08;
+
+      for (let c = 0; c < numColumns; c++) {
+        let level = 0;
+
+        if (hasRealAudio && dataArray) {
+          const binIndex = Math.floor((c / numColumns) * (dataArray.length * 0.4));
+          level = dataArray[binIndex] / 255;
+        } else if (isListeningToMain || isShowLive) {
+          // จังหวะคลื่นจำลองเต้นสดเด้งสนุกสนานเมื่อเปิดเพลง
+          const wave1 = Math.sin(simTick * 2.5 + c * 0.45);
+          const wave2 = Math.cos(simTick * 1.8 - c * 0.35);
+          const wave3 = Math.sin(simTick * 4.2 + (c % 3));
+          level = Math.max(0.12, (wave1 * 0.35 + wave2 * 0.35 + wave3 * 0.3 + 1) / 2);
+          if (c === 7 || c === 8) level = Math.min(1.0, level * 1.35); // ยอดเด่นตรงกลาง
+        } else {
+          level = 0.05;
+        }
+
+        const activeBlocks = Math.round(level * numRows);
+        const colX = c * (blockWidth + colGap);
+
+        // ไล่เฉดสี: ซ้ายชมพูบานเย็นนีออน (Magenta) ขวาส้มคอรัล (Coral Orange)
+        const colRatio = c / (numColumns - 1);
+        const r = 255;
+        const g = Math.round(35 + colRatio * 115);
+        const b = Math.round(110 - colRatio * 90);
+
+        for (let rIdx = 0; rIdx < numRows; rIdx++) {
+          const blockY = vCanvas.height - ((rIdx + 1) * (blockHeight + rowGap));
+
+          if (rIdx < activeBlocks) {
+            // บล็อกที่ติดไฟสว่าง
+            vCtx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            vCtx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.55)`;
+            vCtx.shadowBlur = 4;
+            vCtx.fillRect(colX, blockY, blockWidth, blockHeight);
+            vCtx.shadowBlur = 0;
+          } else {
+            // บล็อกเงาพื้นหลังโปร่งแสงจางๆ
+            vCtx.fillStyle = 'rgba(255, 60, 90, 0.12)';
+            vCtx.fillRect(colX, blockY, blockWidth, blockHeight);
+          }
+        }
       }
     }
-    render();
+
+    renderLED();
   }
 
   sfxButtons.forEach(btn => btn.onclick = () => socket.emit('dj-play-sfx', btn.getAttribute('data-sound')));
@@ -926,23 +935,10 @@ document.addEventListener('DOMContentLoaded', () => {
         source.connect(musicGainNode);
 
         source.onended = () => {
-          if (trackTimerInterval) clearInterval(trackTimerInterval);
           if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
             playItemAtIndex(0);
           }
         };
-
-        if (trackTimerInterval) clearInterval(trackTimerInterval);
-        const duration = audioBuffer.duration;
-        ytRealDuration = duration;
-        if (trackTimeTotal) trackTimeTotal.textContent = formatTime(duration);
-        let elapsed = 0;
-        trackTimerInterval = setInterval(() => {
-          elapsed++;
-          if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(elapsed);
-          if (trackProgressFill) trackProgressFill.style.width = `${Math.min(100, (elapsed / duration) * 100)}%`;
-          if (elapsed >= duration) clearInterval(trackTimerInterval);
-        }, 1000);
 
         source.start();
       } catch (e) {}
@@ -953,10 +949,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (trackTitle) trackTitle.textContent = t.title;
     if (trackArtist) trackArtist.textContent = t.artist;
     if (["รอเริ่มรายการ", "จบรายการแล้ว", "ดีเจออฟไลน์"].includes(t.title)) {
-      if (trackTimerInterval) clearInterval(trackTimerInterval);
-      if (trackTimeCurrent) trackTimeCurrent.textContent = "00:00";
-      if (trackTimeTotal) trackTimeTotal.textContent = "00:00";
-      if (trackProgressFill) trackProgressFill.style.width = "0%";
       if (ytScreenWrapper) {
         ytScreenWrapper.innerHTML = '';
         ytScreenWrapper.classList.add('hide');
@@ -1662,20 +1654,51 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.on('topic-update', (t) => { if (displayTopic) displayTopic.textContent = t; });
   if (btnSaveTopic) btnSaveTopic.onclick = () => { const t = djTopicInput.value.trim(); if (t) { socket.emit('dj-set-topic', t); djTopicInput.value = ''; } };
 
-  socket.on('dj-status-update', (isLive) => {
+  // ========================================================
+  // 🔴 จัดการสถานะรายการสด & ตัวจับเวลารายการ (On-Air Duration)
+  // ========================================================
+  socket.on('dj-status-update', (data) => {
+    const isLive = typeof data === 'object' ? data.isLive : data;
+    const startedAt = typeof data === 'object' ? data.startedAt : null;
     isShowLive = isLive;
+
     if (stationStatus) {
       stationStatus.textContent = isLive ? "● On Air (Live)" : "○ Offline (Auto-DJ)";
       stationStatus.className = isLive ? "status-online" : "status-offline";
     }
+
     if (btnShowToggle) {
       if (isShowLive) {
-        btnShowToggle.textContent = "⏹️ จบรายการ (End Show)"; btnShowToggle.className = "y2k-btn off-air-btn";
+        btnShowToggle.textContent = "⏹️ จบรายการ (End Show)";
+        btnShowToggle.className = "y2k-btn off-air-btn";
         if (djBroadcastTools) djBroadcastTools.classList.remove('hide');
       } else {
-        btnShowToggle.textContent = "🔴 เริ่มจัดรายการ (Go Live)"; btnShowToggle.className = "y2k-btn on-air-btn";
+        btnShowToggle.textContent = "🔴 เริ่มจัดรายการ (Go Live)";
+        btnShowToggle.className = "y2k-btn on-air-btn";
         if (djBroadcastTools) djBroadcastTools.classList.add('hide');
       }
+    }
+
+    // ตัวจับเวลารายการสด On-Air Timer
+    if (liveBroadcastInterval) clearInterval(liveBroadcastInterval);
+
+    if (isLive && startedAt) {
+      broadcastStartTime = startedAt;
+      if (trackTimeTotal) trackTimeTotal.textContent = "LIVE";
+
+      liveBroadcastInterval = setInterval(() => {
+        const elapsedSecs = Math.max(0, Math.floor((Date.now() - broadcastStartTime) / 1000));
+        if (trackTimeCurrent) trackTimeCurrent.textContent = formatTime(elapsedSecs);
+
+        if (trackProgressFill) {
+          trackProgressFill.style.width = `${(elapsedSecs % 60) * (100 / 60)}%`;
+        }
+      }, 1000);
+    } else {
+      broadcastStartTime = null;
+      if (trackTimeCurrent) trackTimeCurrent.textContent = "00:00";
+      if (trackTimeTotal) trackTimeTotal.textContent = "OFFLINE";
+      if (trackProgressFill) trackProgressFill.style.width = "0%";
     }
   });
 

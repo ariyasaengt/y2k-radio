@@ -376,11 +376,15 @@ body.theme-cyber-neon .lcd-text {
   transition: width 0.3s linear;
 }
 
+/* ======================================================== */
+/* 🎛️ LED Segmented Block Visualizer Container             */
+/* ======================================================== */
 .visualizer-bar {
-  width: 100%; height: 42px;
-  background: #050505;
-  border: 1px solid #18181b;
-  border-radius: 2px;
+  width: 100%;
+  height: 64px;
+  background: #18122B;
+  border: 1px solid #3b2d54;
+  border-radius: 4px;
   display: block;
 }
 
