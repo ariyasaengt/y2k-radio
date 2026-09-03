@@ -110,6 +110,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const djBroadcastTools = document.getElementById('dj-broadcast-tools');
   const djFileInput = document.getElementById('dj-file-input');
   const btnPlayMusic = document.getElementById('btn-play-music');
+  const btnPauseMusic = document.getElementById('btn-pause-music');
+  let isMusicPaused = false;
+
   const btnMic = document.getElementById('btn-mic');
   const djTopicInput = document.getElementById('dj-topic-input');
   const btnSaveTopic = document.getElementById('btn-save-topic');
@@ -328,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function playYouTubeTrack(videoId, title, seekTo = 0) {
     if (!videoId) return;
     currentYtVideoId = videoId;
+    isMusicPaused = false;
 
     if (ytScreenWrapper) {
       ytScreenWrapper.classList.remove('hide');
@@ -370,7 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('radio-sync-pulse', (data) => {
-    if (currentYtVideoId === data.videoId) {
+    if (currentYtVideoId === data.videoId && !isMusicPaused) {
       sendIframeCommand('seekTo', [data.currentTime, true]);
     }
   });
@@ -387,6 +391,46 @@ document.addEventListener('DOMContentLoaded', () => {
       ytScreenWrapper.innerHTML = '';
       ytScreenWrapper.classList.add('hide');
     }
+  });
+
+  // ========================================================
+  // ⏸️ ฟังก์ชันพักเพลงชั่วคราวเพื่อคุยไมค์
+  // ========================================================
+  if (btnPauseMusic) {
+    btnPauseMusic.onclick = () => {
+      if (!isShowLive) return alert("กรุณาเริ่มจัดรายการสดก่อนใช้งาน!");
+      if (!isMusicPaused) {
+        socket.emit('dj-pause-track');
+      } else {
+        socket.emit('dj-resume-track');
+      }
+    };
+  }
+
+  socket.on('radio-pause-track', () => {
+    isMusicPaused = true;
+    sendIframeCommand('pauseVideo');
+    if (currentMusicSource && listenAudioCtx) {
+      try { listenAudioCtx.suspend(); } catch(e) {}
+    }
+    if (btnPauseMusic) {
+      btnPauseMusic.textContent = "▶ เล่นเพลงต่อ";
+      btnPauseMusic.style.background = "#86efac";
+    }
+    showMsnToast("Studio", "⏸️ พักเพลงชั่วคราวเพื่อพูดคุย");
+  });
+
+  socket.on('radio-resume-track', () => {
+    isMusicPaused = false;
+    sendIframeCommand('playVideo');
+    if (listenAudioCtx && listenAudioCtx.state === 'suspended') {
+      try { listenAudioCtx.resume(); } catch(e) {}
+    }
+    if (btnPauseMusic) {
+      btnPauseMusic.textContent = "⏸️ พักเพลง";
+      btnPauseMusic.style.background = "";
+    }
+    showMsnToast("Studio", "▶ เล่นเพลงต่อแล้ว");
   });
 
   // ========================================================
@@ -731,7 +775,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } });
 
   // ========================================================
-  // 🎛️ Audio Engine & LED Segmented Block Visualizer
+  // 🎛️ Audio Engine & LED Segmented Block Visualizer (Smooth Sync)
   // ========================================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
   let nextMicPlayTime = 0;
@@ -762,55 +806,73 @@ document.addEventListener('DOMContentLoaded', () => {
   function startVisualizer() {
     if (!vCtx || !vCanvas) return;
 
-    const numColumns = 18;       // จำนวนคอลัมน์คลื่นความถี่
-    const numRows = 16;          // จำนวนชั้นบล็อกไฟแนวตั้ง
-    const colGap = 3;            // ระยะห่างระหว่างคอลัมน์ (แนวนอน)
-    const rowGap = 2;            // ระยะห่างระหว่างก้อนไฟ (แนวตั้ง)
+    const numColumns = 18;
+    const numRows = 16;
+    const colGap = 3;
+    const rowGap = 2;
     
     const blockWidth = (vCanvas.width - (colGap * (numColumns - 1))) / numColumns;
     const blockHeight = (vCanvas.height - (rowGap * (numRows - 1))) / numRows;
 
     let simTick = 0;
+    const currentLevels = new Array(numColumns).fill(0);
     const dataArray = analyserNode ? new Uint8Array(analyserNode.frequencyBinCount) : null;
 
     function renderLED() {
       requestAnimationFrame(renderLED);
 
-      // เคลียร์พื้นหลังสีม่วงเข้มโทนเรโทร
       vCtx.fillStyle = '#18122B';
       vCtx.fillRect(0, 0, vCanvas.width, vCanvas.height);
 
+      let micEnergy = 0;
       let hasRealAudio = false;
       if (analyserNode && dataArray) {
         analyserNode.getByteFrequencyData(dataArray);
         for (let i = 0; i < 16; i++) {
-          if (dataArray[i] > 10) { hasRealAudio = true; break; }
+          if (dataArray[i] > 15) {
+            hasRealAudio = true;
+            micEnergy += dataArray[i];
+          }
         }
       }
 
-      simTick += 0.08;
+      // ปรับลดความเร็วการเคลื่อนที่ลงอย่างมาก เพื่อความนุ่มนวลและไม่ตาลาย
+      simTick += 0.022;
 
       for (let c = 0; c < numColumns; c++) {
-        let level = 0;
+        let targetLevel = 0;
 
-        if (hasRealAudio && dataArray) {
-          const binIndex = Math.floor((c / numColumns) * (dataArray.length * 0.4));
-          level = dataArray[binIndex] / 255;
+        if (isMusicPaused) {
+          // หากดีเจสั่งพักเพลง: เต้นตามเสียงไมค์พูด ถ้าไม่พูดจะลดแตะ 0
+          if (hasRealAudio && micEnergy > 40) {
+            const binIndex = Math.floor((c / numColumns) * 16);
+            targetLevel = Math.min(1.0, (dataArray[binIndex] / 255) * 1.5);
+          } else {
+            targetLevel = 0;
+          }
+        } else if (hasRealAudio && micEnergy > 40) {
+          // มีเสียงไมค์ดีเจเข้ามาจริง
+          const binIndex = Math.floor((c / numColumns) * 16);
+          targetLevel = (dataArray[binIndex] / 255);
         } else if (isListeningToMain || isShowLive) {
-          // จังหวะคลื่นจำลองเต้นสดเด้งสนุกสนานเมื่อเปิดเพลง
-          const wave1 = Math.sin(simTick * 2.5 + c * 0.45);
-          const wave2 = Math.cos(simTick * 1.8 - c * 0.35);
-          const wave3 = Math.sin(simTick * 4.2 + (c % 3));
-          level = Math.max(0.12, (wave1 * 0.35 + wave2 * 0.35 + wave3 * 0.3 + 1) / 2);
-          if (c === 7 || c === 8) level = Math.min(1.0, level * 1.35); // ยอดเด่นตรงกลาง
+          // ขณะกำลังเล่นเพลง: คำนวณคลื่นความถี่จำลองด้วยความเร็วที่นุ่มนวล
+          const w1 = Math.sin(simTick * 1.2 + c * 0.38);
+          const w2 = Math.cos(simTick * 0.9 - c * 0.28);
+          const w3 = Math.sin(simTick * 2.1 + (c % 4));
+          targetLevel = Math.max(0.08, (w1 * 0.4 + w2 * 0.35 + w3 * 0.25 + 1) / 2);
+
+          if (c >= 2 && c <= 7) targetLevel *= 1.2;
+          targetLevel = Math.min(0.95, targetLevel);
         } else {
-          level = 0.05;
+          targetLevel = 0;
         }
 
-        const activeBlocks = Math.round(level * numRows);
+        // Smooth Lerp: ให้แถบไฟค่อยๆ เคลื่อนไหวอย่างสมูท
+        currentLevels[c] += (targetLevel - currentLevels[c]) * 0.18;
+        const activeBlocks = Math.round(currentLevels[c] * numRows);
         const colX = c * (blockWidth + colGap);
 
-        // ไล่เฉดสี: ซ้ายชมพูบานเย็นนีออน (Magenta) ขวาส้มคอรัล (Coral Orange)
+        // ไล่เฉดสีชมพูบานเย็น (ซ้าย) ไปส้ม (ขวา)
         const colRatio = c / (numColumns - 1);
         const r = 255;
         const g = Math.round(35 + colRatio * 115);
@@ -820,15 +882,14 @@ document.addEventListener('DOMContentLoaded', () => {
           const blockY = vCanvas.height - ((rIdx + 1) * (blockHeight + rowGap));
 
           if (rIdx < activeBlocks) {
-            // บล็อกที่ติดไฟสว่าง
             vCtx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-            vCtx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.55)`;
+            vCtx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.5)`;
             vCtx.shadowBlur = 4;
             vCtx.fillRect(colX, blockY, blockWidth, blockHeight);
             vCtx.shadowBlur = 0;
           } else {
-            // บล็อกเงาพื้นหลังโปร่งแสงจางๆ
-            vCtx.fillStyle = 'rgba(255, 60, 90, 0.12)';
+            // บล็อกเงาพื้นหลัง
+            vCtx.fillStyle = 'rgba(255, 60, 90, 0.1)';
             vCtx.fillRect(colX, blockY, blockWidth, blockHeight);
           }
         }
@@ -1679,7 +1740,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // ตัวจับเวลารายการสด On-Air Timer
     if (liveBroadcastInterval) clearInterval(liveBroadcastInterval);
 
     if (isLive && startedAt) {
