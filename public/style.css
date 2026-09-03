@@ -173,6 +173,9 @@ body.theme-cyber-neon .lcd-text {
   margin-left: auto;
 }
 
+/* ======================================================== */
+/* 🖥️ เลย์เอาต์ 3 คอลัมน์ (ซ้าย - กลาง - ขวา)               */
+/* ======================================================== */
 .desktop-wrap {
   display: flex;
   gap: 10px;
@@ -358,46 +361,11 @@ body.theme-cyber-neon .lcd-text {
   display: block;
 }
 
-.playlist-section {
+/* คอลัมน์กลาง: แชท */
+.chat-window {
   flex: 1;
-  min-height: 80px;
-  overflow-y: auto;
+  min-width: 320px;
 }
-
-.playlist-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.playlist-list li {
-  padding: 4px 6px;
-  background: #f0f5fa;
-  border-bottom: 1px solid #d4e2ee;
-  font-size: 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  transition: background 0.15s ease;
-}
-
-.playlist-list li:hover { background: #e0f2fe; }
-
-.play-now-pill {
-  background: #10b981;
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: bold;
-  padding: 2px 6px;
-  border-radius: 3px;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.play-now-pill:hover { background: #059669; }
-
-.chat-window { flex: 1; }
 
 .marquee-ticker {
   background: #1e3a8a;
@@ -856,7 +824,6 @@ body.theme-cyber-neon .lcd-text {
 
 .chat-toolbar { display: flex; gap: 4px; margin-bottom: 6px; align-items: center; }
 
-/* ขนาดปุ่ม Toolbar เท่ากันทุกปุ่ม ไม่ล้นตกขอบ */
 .tool-btn {
   background: #eef3f9;
   border: 1px solid #9dbcdb;
@@ -1008,34 +975,30 @@ body.theme-cyber-neon .lcd-text {
   padding: 4px 8px !important;
 }
 
-@media (max-width: 768px) {
-  body { height: auto !important; min-height: 100vh; overflow-y: auto !important; padding: 6px !important; display: block !important; }
-  .desktop-wrap { flex-direction: column !important; height: auto !important; max-width: 100% !important; gap: 10px; }
-  .side-bar { width: 100% !important; max-height: none !important; }
-  .playlist-section { max-height: 140px; }
-  .chat-window { width: 100% !important; height: 75vh !important; min-height: 500px; }
-  .topic-banner { flex-wrap: wrap; gap: 6px; padding: 6px 10px; }
-  .topic-text { font-size: 12px; white-space: normal; }
-  .chat-toolbar { flex-wrap: wrap; }
-  .input-row { flex-wrap: wrap; }
-  #username, #userstatus { width: 100% !important; }
-  #btn-send { width: 70px; }
+/* ======================================================== */
+/* 🎵 คอลัมน์ขวา: หน้าต่าง Playlist Queue Manager เฉพาะ       */
+/* ======================================================== */
+.playlist-window-pane {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* ======================================================== */
-/* 🎵 Studio Playlist Layout (ด้านขวา)                       */
-/* ======================================================== */
-.tab-playlist-highlight {
-  background: linear-gradient(180deg, #fef08a 0%, #fde047 100%) !important;
-  color: #713f12 !important;
-  border-color: #ca8a04 !important;
+.playlist-pane-content {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  flex: 1;
+  background: #f1f5f9;
 }
 
 .studio-playlist-header {
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
-  padding: 10px 14px;
-  margin-bottom: 8px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 8px 10px;
   border-radius: 4px;
 }
 
@@ -1043,8 +1006,7 @@ body.theme-cyber-neon .lcd-text {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 4px;
+  gap: 5px;
 }
 
 .studio-playlist-item {
@@ -1053,43 +1015,42 @@ body.theme-cyber-neon .lcd-text {
   justify-content: space-between;
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  border-radius: 5px;
-  padding: 6px 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  transition: all 0.15s ease;
+  border-radius: 4px;
+  padding: 5px 8px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  transition: all 0.12s ease;
 }
 
 .studio-playlist-item:hover {
-  background: #f0f9ff;
+  background: #e0f2fe;
   border-color: #38bdf8;
 }
 
 .track-meta-title {
   font-weight: 600;
   color: #1e293b;
-  font-size: 12px;
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 320px;
+  max-width: 170px;
 }
 
 .queue-action-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
 }
 
 .q-btn {
   border: 1px solid #cbd5e1;
   border-radius: 3px;
-  padding: 2px 6px;
-  font-size: 11px;
+  padding: 1px 4px;
+  font-size: 10px;
   font-weight: bold;
   cursor: pointer;
   background: #ffffff;
-  transition: background 0.1s ease;
 }
 
 .q-btn:hover { background: #f1f5f9; }
@@ -1097,3 +1058,24 @@ body.theme-cyber-neon .lcd-text {
 .q-btn-play:hover { background: #059669; }
 .q-btn-delete { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
 .q-btn-delete:hover { background: #fca5a5; }
+
+.playlist-footer-bar {
+  background: #e2e8f0;
+  border-top: 1px solid #cbd5e1;
+  padding: 4px 8px;
+  text-align: center;
+}
+
+@media (max-width: 1024px) {
+  body { height: auto !important; min-height: 100vh; overflow-y: auto !important; padding: 6px !important; display: block !important; }
+  .desktop-wrap { flex-direction: column !important; height: auto !important; max-width: 100% !important; gap: 10px; }
+  .side-bar, .playlist-window-pane { width: 100% !important; max-height: none !important; }
+  .playlist-pane-content { max-height: 250px; }
+  .chat-window { width: 100% !important; height: 75vh !important; min-height: 500px; }
+  .topic-banner { flex-wrap: wrap; gap: 6px; padding: 6px 10px; }
+  .topic-text { font-size: 12px; white-space: normal; }
+  .chat-toolbar { flex-wrap: wrap; }
+  .input-row { flex-wrap: wrap; }
+  #username, #userstatus { width: 100% !important; }
+  #btn-send { width: 70px; }
+}

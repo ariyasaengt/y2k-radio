@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Y2K Messenger Radio - Winamp & MSN Suite</title>
+  <title>Y2K Messenger Radio - Winamp Studio Suite</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="theme-winamp-classic">
@@ -13,11 +13,11 @@
   <div id="winks-overlay-container" class="winks-overlay hide"></div>
 
   <div id="main-app-window" class="desktop-wrap">
-    <!-- แถบซ้าย: สถานีวิทยุและแผงควบคุมดีเจ -->
+    <!-- คอลัมน์ที่ 1 (ซ้าย): Radio Controller & Broadcast Booth -->
     <aside class="window-pane side-bar">
       <div class="window-header">
         <span class="icon-flower">🌸</span>
-        <span class="title">Radio Controller (Winamp Pro)</span>
+        <span class="title">Radio Controller</span>
         <select id="winamp-skin-select" class="skin-dropdown" title="เปลี่ยนสกิน Winamp">
           <option value="theme-winamp-classic">⚡ Classic Dark</option>
           <option value="theme-y2k-aero">🍬 Y2K Aero Pink</option>
@@ -250,11 +250,11 @@
       </div>
     </aside>
 
-    <!-- แถบขวา: ห้องแชท & คิวเพลงจัดการสตูดิโอ -->
+    <!-- คอลัมน์ที่ 2 (กลาง): ห้องแชท MSN Messenger Edition (แชทล้วนๆ ไม่มีแท็บคิวเพลง) -->
     <main class="window-pane chat-window">
       <div class="window-header">
         <span class="icon-bubble">💬</span>
-        <span class="title">Live Chat & Studio Playlist (MSN Edition)</span>
+        <span class="title">Live Chat & Shoutbox (MSN Edition)</span>
         <label style="margin-left: auto; font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
           <input type="checkbox" id="chk-msn-sound" checked> 🔊 เสียง MSN
         </label>
@@ -262,7 +262,7 @@
 
       <div class="marquee-ticker">
         <marquee scrollamount="4" behavior="scroll" direction="left">
-          ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • สเปกตรัมเต้นสดสไตล์ Winamp • จัดคิวเพลง สลับ และลบได้สะดวกในแท็บ Playlist ✨
+          ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • สเปกตรัมเต้นสดสไตล์ Winamp • พิมพ์โค้ดสี MSN Plus เช่น ·$4แดง ·$1 ·$3เขียว ได้เลย! ✨
         </marquee>
       </div>
 
@@ -276,28 +276,12 @@
         <span id="pinned-text" class="pinned-text"></span>
       </div>
 
-      <!-- หัวแท็บ: มีแท็บ Playlist แยกชัดเจน -->
       <div id="chat-tabs-header" class="chat-tab-bar">
         <div class="tab active" data-tab="general">💬 General Room</div>
-        <div class="tab tab-playlist-highlight" data-tab="playlist">🎵 Playlist Queue (<span id="tab-queue-count">0</span>)</div>
       </div>
 
       <div id="chat-logs-container" class="chat-logs-wrapper">
-        <!-- หน้าแชทปกติ -->
         <div id="chat-logs" class="chat-logs tab-pane active"></div>
-
-        <!-- หน้าต่าง Playlist Queue ด้านขวา (สำหรับจัดการ สลับ และลบคิว) -->
-        <div id="pane-playlist" class="chat-logs tab-pane">
-          <div class="studio-playlist-header">
-            <div>
-              <strong style="color: #0c4383; font-size: 13px;">📋 รายการเพลงในคิวสถานี (Playlist Manager)</strong>
-              <div style="font-size: 11px; color: #64748b;">ดีเจและแอดมินสามารถคลิกเลื่อนลำดับเพลง 🔼 🔽 หรือ 🗑️ ลบเพลงที่ไม่ต้องการได้ทันที</div>
-            </div>
-          </div>
-          <ul id="playlist-container" class="studio-playlist-list">
-            <li>ไม่มีรายการเพลง</li>
-          </ul>
-        </div>
       </div>
 
       <div class="chat-input-area">
@@ -351,6 +335,29 @@
       
       <div class="banner-bottom"><span>Retro Sound Wave 2000 • Winamp Spectrum • High Fidelity Stereo</span></div>
     </main>
+
+    <!-- คอลัมน์ที่ 3 (ขวา): หน้าต่างคิวเพลงโดยเฉพาะ (Playlist Queue Window) -->
+    <aside class="window-pane playlist-window-pane">
+      <div class="window-header">
+        <span class="icon-flower">🎵</span>
+        <span class="title">Winamp Playlist (<span id="right-queue-count">0</span>)</span>
+      </div>
+      
+      <div class="playlist-pane-content">
+        <div class="studio-playlist-header">
+          <strong style="color: #0c4383; font-size: 12px;">📋 คิวเพลงสตูดิโอ (On-Air Queue)</strong>
+          <div style="font-size: 10px; color: #64748b; margin-top: 2px;">คลิก 🔼 🔽 เพื่อสลับคิว หรือ 🗑️ เพื่อลบเพลง</div>
+        </div>
+
+        <ul id="playlist-container" class="studio-playlist-list">
+          <li>ไม่มีรายการเพลง</li>
+        </ul>
+      </div>
+
+      <div class="playlist-footer-bar">
+        <span style="font-size: 10px; color: #475569; font-weight: bold;">⚡ Auto-Loop Next Active</span>
+      </div>
+    </aside>
   </div>
 
   <!-- Modal ขอเพลง -->
@@ -480,6 +487,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=45"></script>
+  <script src="app.js?v=50"></script>
 </body>
 </html>
