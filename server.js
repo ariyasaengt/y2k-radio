@@ -24,8 +24,19 @@ let songRequests = [];
 let djQueue = [];
 
 let onlineUsersCount = 0;
-let totalHitsCount = 1337; // ตัวนับผู้เข้าชมสไตล์เรโทร
+let totalHitsCount = 1337;
 let currentVolumes = { music: 0.8, mic: 1.0 };
+
+// Auto-DJ Playlist (เพลงฮิตยุค 2000s)
+const AUTO_DJ_PLAYLIST = [
+  { videoId: '5qap5aO4i9A', title: 'Lofi Hip Hop - Chill Beats 2000s' },
+  { videoId: 'jfKfPfyJRdk', title: 'Lofi Girl - Relaxing Radio' },
+  { videoId: '7NOSDKb0HlU', title: 'Retro Y2K Pop Melodies' }
+];
+let autoDjIndex = 0;
+
+// โพลเพลงสด (Music Battle)
+let activePoll = null;
 
 function getThaiTime() {
   return new Date().toLocaleTimeString('th-TH', {
@@ -100,8 +111,30 @@ function checkDayReset() {
   }
 }
 
+// เริ่มเล่น Auto-DJ อัตโนมัติถ้าไม่มีดีเจสด
+function startAutoDJ() {
+  if (isDJLive) return;
+  const track = AUTO_DJ_PLAYLIST[autoDjIndex % AUTO_DJ_PLAYLIST.length];
+  autoDjIndex++;
+  const startedAt = Date.now();
+  currentTrack = {
+    title: `[Auto-DJ] ${track.title}`,
+    artist: "Y2K Bot Station",
+    duration: 0,
+    youtubeId: track.videoId,
+    startedAt: startedAt
+  };
+  io.emit('track-update', currentTrack);
+  io.emit('play-youtube-track', {
+    videoId: track.videoId,
+    title: currentTrack.title,
+    seekTo: 0
+  });
+}
+
+// ส่ง Sync Pulse ทุก 3 วินาที
 setInterval(() => {
-  if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
+  if (currentTrack.youtubeId && currentTrack.startedAt) {
     const currentSeconds = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
     io.emit('radio-sync-pulse', {
       videoId: currentTrack.youtubeId,
@@ -134,12 +167,12 @@ io.on('connection', (socket) => {
   socket.emit('dj-status-update', isDJLive);
 
   let trackToSend = { ...currentTrack };
-  if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
+  if (currentTrack.youtubeId && currentTrack.startedAt) {
     trackToSend.seekTo = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
   }
   socket.emit('track-update', trackToSend);
 
-  if (isDJLive && currentTrack.youtubeId) {
+  if (currentTrack.youtubeId) {
     socket.emit('play-youtube-track', {
       videoId: currentTrack.youtubeId,
       title: currentTrack.title,
@@ -153,7 +186,9 @@ io.on('connection', (socket) => {
   socket.emit('playlist-update', playlist);
   socket.emit('requests-update', songRequests);
   socket.emit('chat-history', chatHistory);
+  if (activePoll) socket.emit('poll-update', activePoll);
 
+  // แชทส่วนรวม
   socket.on('chat-message', (data) => {
     checkDayReset();
     const newMsg = {
@@ -171,6 +206,78 @@ io.on('connection', (socket) => {
     io.emit('chat-message', newMsg);
   });
 
+  // แชทกระซิบส่วนตัว (Private Whisper)
+  socket.on('private-whisper', (data) => {
+    const targetSocket = io.sockets.sockets.get(data.targetSocketId);
+    const whisperPayload = {
+      senderSocketId: socket.id,
+      fromUser: data.fromUser || 'Guest',
+      toUser: data.toUser,
+      text: data.text,
+      time: getThaiTime()
+    };
+    if (targetSocket) {
+      targetSocket.emit('receive-whisper', whisperPayload);
+      socket.emit('receive-whisper', whisperPayload);
+    }
+  });
+
+  // ส่ง MSN Winks (แอนิเมชันเต็มจอ)
+  socket.on('send-wink', (winkType) => {
+    io.emit('receive-wink', {
+      user: socket.djName || 'ใครบางคน',
+      type: winkType
+    });
+  });
+
+  // ระบบโพลเพลงสด (Music Battle)
+  socket.on('dj-create-poll', (pollData) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    activePoll = {
+      title: pollData.title || "Music Battle!",
+      songA: pollData.songA,
+      songB: pollData.songB,
+      votesA: 0,
+      votesB: 0,
+      voters: []
+    };
+    io.emit('poll-update', activePoll);
+  });
+
+  socket.on('cast-vote', (option) => {
+    if (!activePoll) return;
+    if (activePoll.voters.includes(socket.id)) return;
+    activePoll.voters.push(socket.id);
+    if (option === 'A') activePoll.votesA++;
+    if (option === 'B') activePoll.votesB++;
+    io.emit('poll-update', activePoll);
+  });
+
+  socket.on('dj-end-poll', () => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    if (!activePoll) return;
+    const winner = activePoll.votesA >= activePoll.votesB ? activePoll.songA : activePoll.songB;
+    io.emit('system-announcement', `🏆 ผลโหวตชนะเลิศ: "${winner}" ได้รับคะแนนสูงสุด!`);
+    playlist.unshift({ name: `▶ [โหวตชนะ] ${winner}`, type: 'youtube', videoId: '' });
+    io.emit('playlist-update', playlist);
+    activePoll = null;
+    io.emit('poll-update', null);
+  });
+
+  // ขอเพลงนิรนาม / สารภาพรัก
+  socket.on('submit-secret-dedication', (data) => {
+    const item = {
+      id: Date.now(),
+      user: "💌 ผู้ไม่ประสงค์ออกนาม (ความลับ)",
+      song: data.song,
+      note: `[สารภาพรัก/ข้อความลับ]: ${data.note || ''}`,
+      time: getThaiTime()
+    };
+    songRequests.push(item);
+    io.emit('requests-update', songRequests);
+  });
+
+  // Moderation: Kick / Ban
   socket.on('admin-kick-user', (targetSocketId) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     const target = io.sockets.sockets.get(targetSocketId);
@@ -217,7 +324,6 @@ io.on('connection', (socket) => {
   socket.on('dj-register', (data, callback) => {
     const cleanUser = (data.username || '').trim();
     const cleanPass = (data.password || '').trim();
-
     if (!cleanUser || !cleanPass) return callback({ success: false, message: "กรุณากรอกชื่อและรหัสผ่าน!" });
     if (cleanUser.toLowerCase() === 'admin' || cleanPass === ADMIN_SECRET_KEY) return callback({ success: false, message: "ชื่อนี้สงวนไว้สำหรับแอดมิน!" });
     if (registeredDJs[cleanUser]) return callback({ success: false, message: "ชื่อจัดรายการนี้มีผู้ใช้งานแล้ว!" });
@@ -309,6 +415,8 @@ io.on('connection', (socket) => {
     io.emit('dj-status-update', false);
     io.emit('track-update', currentTrack);
     io.emit('dj-stop-youtube');
+    // ถอยกลับมาเล่น Auto-DJ ต่อเนื่อง
+    startAutoDJ();
   });
 
   socket.on('dj-play-youtube', (ytData) => {
@@ -332,7 +440,6 @@ io.on('connection', (socket) => {
     });
   });
 
-  // แก้ไขระบบเพิ่มเพลง YouTube: มี Fallback ป้องกัน Promise ค้าง
   socket.on('dj-add-youtube-to-playlist', async (item) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
 
@@ -352,9 +459,7 @@ io.on('connection', (socket) => {
         const info = await response.json();
         if (info && info.title) songTitle = info.title;
       }
-    } catch (err) {
-      console.log("oEmbed Timeout/Error, using fallback title");
-    }
+    } catch (err) {}
 
     playlist.push({
       name: `▶ [YT] ${songTitle}`,
@@ -460,13 +565,16 @@ io.on('connection', (socket) => {
     if (currentBroadcaster && currentBroadcaster.socketId === socket.id) {
       isDJLive = false;
       currentBroadcaster = null;
-      currentTrack = { title: "ดีเจออฟไลน์", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
       io.emit('dj-status-update', false);
-      io.emit('track-update', currentTrack);
       io.emit('dj-stop-youtube');
+      startAutoDJ();
     }
   });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+  // เริ่มต้น Auto-DJ
+  startAutoDJ();
+});

@@ -7,7 +7,7 @@
 }
 
 /* Custom Magic Y2K Cursor */
-body, button, input, select {
+body, button, input, select, textarea {
   cursor: url('https://cur.cursors-4u.net/symbols/sym-1/sym48.cur'), auto !important;
 }
 
@@ -40,6 +40,34 @@ body, button, input, select {
   0% { transform: translateY(0) scale(0.6) rotate(0deg); opacity: 1; }
   50% { transform: translateY(-120px) scale(1.2) rotate(-15deg); opacity: 0.9; }
   100% { transform: translateY(-260px) scale(1) rotate(15deg); opacity: 0; }
+}
+
+/* ======================================================== */
+/* 🌟 MSN Winks Fullscreen Overlay                          */
+/* ======================================================== */
+.winks-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999999;
+}
+
+.wink-item {
+  font-size: 130px;
+  animation: winkZoomInOut 2.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  filter: drop-shadow(0 10px 25px rgba(0,0,0,0.5));
+}
+
+@keyframes winkZoomInOut {
+  0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+  25% { transform: scale(1.4) rotate(10deg); opacity: 1; }
+  75% { transform: scale(1.2) rotate(0deg); opacity: 1; }
+  100% { transform: scale(0) rotate(20deg); opacity: 0; }
 }
 
 /* MSN Toast Notification */
@@ -80,6 +108,9 @@ body, button, input, select {
   color: #1e293b;
 }
 
+/* ======================================================== */
+/* 🎨 Winamp Skins System                                   */
+/* ======================================================== */
 body {
   background: #0a246a url('https://web.archive.org/web/20091027110156/http://geocities.com/clipart/pbi/backgrounds/Generic/clouds.jpg') repeat;
   display: flex;
@@ -88,6 +119,69 @@ body {
   height: 100vh; width: 100vw;
   padding: 10px;
   overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+/* 1. Theme Classic Winamp (Default) */
+body.theme-winamp-classic .winamp-chassis {
+  background: #27272a !important;
+  border: 2px solid #52525b !important;
+}
+body.theme-winamp-classic .lcd-text {
+  color: #22c55e !important;
+  text-shadow: 0 0 6px rgba(34, 197, 94, 0.75);
+}
+
+/* 2. Theme Y2K Aero Pink */
+body.theme-y2k-aero {
+  background: #f472b6 url('https://web.archive.org/web/20090902161429/http://geocities.com/clipart/pbi/backgrounds/Generic/hearts.gif') repeat !important;
+}
+body.theme-y2k-aero .window-pane {
+  border-color: #ec4899 !important;
+}
+body.theme-y2k-aero .window-header {
+  background: linear-gradient(180deg, #f472b6 0%, #db2777 100%) !important;
+}
+body.theme-y2k-aero .winamp-chassis {
+  background: #fdf2f8 !important;
+  border: 2px solid #f472b6 !important;
+}
+body.theme-y2k-aero .winamp-screen {
+  background: #500724 !important;
+}
+body.theme-y2k-aero .lcd-text {
+  color: #f472b6 !important;
+  text-shadow: 0 0 6px rgba(244, 114, 182, 0.9) !important;
+}
+
+/* 3. Theme Cyber Neon */
+body.theme-cyber-neon {
+  background: #020617 url('https://web.archive.org/web/20091027072551/http://geocities.com/clipart/pbi/backgrounds/Generic/stars.gif') repeat !important;
+}
+body.theme-cyber-neon .window-pane {
+  border-color: #06b6d4 !important;
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.5) !important;
+}
+body.theme-cyber-neon .window-header {
+  background: linear-gradient(180deg, #0891b2 0%, #0e7490 100%) !important;
+}
+body.theme-cyber-neon .winamp-chassis {
+  background: #090d16 !important;
+  border: 2px solid #06b6d4 !important;
+}
+body.theme-cyber-neon .lcd-text {
+  color: #06b6d4 !important;
+  text-shadow: 0 0 8px rgba(6, 182, 212, 0.9) !important;
+}
+
+.skin-dropdown {
+  background: #fff;
+  border: 1px solid #71717a;
+  border-radius: 3px;
+  font-size: 10px;
+  padding: 1px 4px;
+  color: #000;
+  margin-left: auto;
 }
 
 .desktop-wrap {
@@ -195,34 +289,12 @@ body {
   padding: 8px;
 }
 
-/* Winamp Chassis Style */
-.winamp-chassis {
-  background: #27272a !important;
-  border: 2px solid #52525b !important;
-  box-shadow: inset 0 1px 2px #000, 0 2px 6px rgba(0,0,0,0.5);
-}
-
-.winamp-header-title {
-  color: #38bdf8 !important;
-  font-family: monospace;
-  font-size: 11px;
-  text-align: center;
-  letter-spacing: 1px;
-  border-bottom-color: #3f3f46 !important;
-}
-
 .winamp-screen {
-  background: #000000 !important;
+  background: #000000;
   border: 1px solid #3f3f46;
   border-radius: 3px;
   padding: 6px;
   margin-bottom: 8px;
-}
-
-.lcd-text {
-  font-family: 'Courier New', monospace;
-  color: #22c55e !important;
-  text-shadow: 0 0 6px rgba(34, 197, 94, 0.75);
 }
 
 .section-title {
@@ -632,35 +704,83 @@ body {
 .ie-badge { background: #0284c7; color: #fff; }
 .html-badge { background: #ea580c; color: #fff; }
 
+/* Music Battle UI */
+.poll-bars-row {
+  display: flex;
+  gap: 6px;
+}
+.poll-btn {
+  flex: 1;
+  background: linear-gradient(180deg, #eff6ff 0%, #bfdbfe 100%);
+  border: 1px solid #3b82f6;
+  border-radius: 4px;
+  padding: 6px 4px;
+  font-weight: bold;
+  font-size: 11px;
+  color: #1e3a8a;
+  cursor: pointer;
+  text-align: center;
+}
+.poll-btn:hover { background: #93c5fd; }
+
+/* Tabs & Whisper Window */
 .chat-tab-bar {
   background: #cfdef1;
   padding: 4px 8px 0;
   display: flex;
+  gap: 4px;
   border-bottom: 1px solid #8caed4;
+  overflow-x: auto;
 }
 
 .tab {
-  background: #ece9d8;
-  padding: 5px 12px;
+  background: #d4e2ee;
+  padding: 4px 10px;
   border: 1px solid #8caed4;
   border-bottom: none;
-  border-radius: 6px 6px 0 0;
+  border-radius: 5px 5px 0 0;
   font-weight: bold;
-  color: #0c4383;
+  font-size: 11px;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab.active {
+  background: #ffffff !important;
+  color: #0c4383 !important;
+}
+
+.chat-logs-wrapper {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  background: #fff;
 }
 
 .chat-logs {
   flex: 1;
-  background: #ffffff;
   padding: 12px;
   overflow-y: auto;
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 8px;
 }
 
+.chat-logs.active {
+  display: flex !important;
+}
+
 .chat-bubble { padding: 3px 0; }
 .chat-bubble .meta { color: #0055ea; font-weight: bold; font-size: 11px; }
+
+.user-clickable {
+  cursor: pointer !important;
+  text-decoration: underline dotted;
+}
+.user-clickable:hover {
+  color: #0284c7;
+}
 
 .role-badge-admin {
   background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
@@ -728,11 +848,6 @@ body {
 }
 .ban-btn:hover { background: #fca5a5 !important; }
 
-.unban-btn {
-  background: #0284c7 !important;
-  color: white !important;
-}
-
 .chat-input-area {
   background: #f1f4f9;
   border-top: 1px solid #b2c9e2;
@@ -763,6 +878,7 @@ body {
 }
 .tool-btn.active { background: #bfdbfe; border-color: #2563eb; }
 .heart-btn { background: linear-gradient(180deg, #fce7f3 0%, #fbcfe8 100%); border-color: #f472b6; }
+.secret-btn { background: linear-gradient(180deg, #fef3c7 0%, #fde68a 100%) !important; border-color: #f59e0b !important; }
 .nudge-btn {
   width: auto !important;
   padding: 0 8px;
@@ -788,7 +904,8 @@ body {
   font-size: 16px;
   z-index: 100;
 }
-.emoji-picker span { cursor: pointer; }
+.emoji-picker span { cursor: pointer; padding: 2px; }
+.emoji-picker span:hover { background: #e0f2fe; border-radius: 3px; }
 .color-picker-label { cursor: pointer; }
 .color-picker-label input { opacity: 0; width: 0; height: 0; position: absolute; }
 
