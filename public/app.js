@@ -312,11 +312,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================
-  // 🎥 YouTube Direct Embed
+  // 🎥 YouTube Direct Embed & Playback
   // ========================================================
   let currentYtVideoId = null;
-  let lastClientYtTime = 0;
-  let ytRealDuration = 0;
   const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
 
   function sendIframeCommand(func, args = []) {
@@ -332,19 +330,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function playYouTubeTrack(videoId, title, seekTo = 0) {
     if (!videoId) return;
+
+    // ถ้ากำลังเล่นเพลงเดิมอยู่แล้ว ไม่ต้องโหลด Iframe ใหม่ให้เสียงกระตุก
+    const existingIframe = document.getElementById('active-yt-iframe');
+    if (currentYtVideoId === videoId && existingIframe) {
+      if (trackTitle) trackTitle.textContent = title || "YouTube Track";
+      return;
+    }
+
     currentYtVideoId = videoId;
     isMusicPaused = false;
-    lastClientYtTime = seekTo || 0;
 
     if (ytScreenWrapper) {
       ytScreenWrapper.classList.remove('hide');
-      const startSec = Math.floor(seekTo || 0);
+      const startSec = Math.max(0, Math.floor(seekTo || 0));
       const isMuted = !isListeningToMain ? 1 : 0;
       
       ytScreenWrapper.innerHTML = `
         <iframe id="active-yt-iframe"
           width="100%" height="140"
-          src="https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&playsinline=1&controls=1&rel=0&start=${startSec}&mute=${isMuted}&origin=${encodeURIComponent(window.location.origin)}"
+          src="https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&playsinline=1&controls=1&rel=0&start=${startSec}&mute=${isMuted}"
           frameborder="0"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowfullscreen>
@@ -367,13 +372,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof e.data !== 'string') return;
       const data = JSON.parse(e.data);
       if (data.event === 'infoDelivery' && data.info) {
-        if (data.info.duration && data.info.duration > 0) {
-          ytRealDuration = Math.floor(data.info.duration);
-        }
-        if (data.info.currentTime !== undefined) {
-          lastClientYtTime = data.info.currentTime;
-        }
-
         // เมื่อเพลงเล่นจบจริง
         if (data.info.playerState === 0) {
           if (myRole === 'admin' || myRole === 'dj') {
@@ -389,20 +387,8 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(err) {}
   });
 
-  // ซิงค์อัจฉริยะ: ไม่ดึง seekTo รบกวนหากเล่นห่างกันเล็กน้อย
-  socket.on('radio-sync-pulse', (data) => {
-    if (!currentYtVideoId || currentYtVideoId !== data.videoId || isMusicPaused) return;
-
-    const targetTime = Math.max(0, (Date.now() - data.startedAt) / 1000);
-    if (ytRealDuration > 0 && targetTime >= ytRealDuration) return;
-
-    const drift = Math.abs(targetTime - lastClientYtTime);
-
-    // แก้ไขหัวอ่านเฉพาะเมื่อหลุดจังหวะเกิน 5 วินาทีจริง
-    if (drift > 5.0) {
-      sendIframeCommand('seekTo', [targetTime, true]);
-    }
-  });
+  // ปิดลูป seekTo รบกวน
+  socket.on('radio-sync-pulse', () => {});
 
   socket.on('play-youtube-track', (data) => {
     initAudioContext();
@@ -412,7 +398,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('dj-stop-youtube', () => {
     currentYtVideoId = null;
-    ytRealDuration = 0;
     if (ytScreenWrapper) {
       ytScreenWrapper.innerHTML = '';
       ytScreenWrapper.classList.add('hide');
@@ -949,11 +934,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startListeningMainStation() {
     initAudioContext();
-    if (listenAudioCtx.state === 'suspended') listenAudioCtx.resume();
+    if (listenAudioCtx && listenAudioCtx.state === 'suspended') listenAudioCtx.resume();
     if (backupAudioPlayer) backupAudioPlayer.pause();
 
     sendIframeCommand('unMute');
     sendIframeCommand('setVolume', [sliderMusicVol ? parseInt(sliderMusicVol.value) : 80]);
+    sendIframeCommand('playVideo');
 
     isListeningToMain = true;
     if (btnListen) {
@@ -1585,7 +1571,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const p = particles[i];
       p.x += p.vx; p.y += p.vy; p.alpha -= 0.025;
       gCtx.fillStyle = p.color; gCtx.globalAlpha = Math.max(0, p.alpha);
-      gCtx.beginPath(); gCtx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2); gCtx.fill();
+      gCtx.beginPath(); gCtx.arc(p.x, p.size / 2, 0, Math.PI * 2); gCtx.fill();
       if (p.alpha <= 0) { particles.splice(i, 1); i--; }
     }
     requestAnimationFrame(animateGlitter);

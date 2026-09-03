@@ -1,503 +1,657 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Y2K Messenger Radio - Winamp Studio Suite</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body class="theme-winamp-classic">
-  <canvas id="glitter-canvas"></canvas>
-  <div id="heart-container" class="heart-container"></div>
-  <div id="msn-toast-container" class="msn-toast-container"></div>
-  <div id="winks-overlay-container" class="winks-overlay hide"></div>
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+const fs = require('fs');
 
-  <div id="main-app-window" class="desktop-wrap">
-    <!-- คอลัมน์ที่ 1 (ซ้าย): Radio Controller & Broadcast Booth -->
-    <aside class="window-pane side-bar">
-      <div class="window-header">
-        <span class="icon-flower">🌸</span>
-        <span class="title">Radio Controller</span>
-        <select id="winamp-skin-select" class="skin-dropdown" title="เปลี่ยนสกิน Winamp">
-          <option value="theme-winamp-classic">⚡ Classic Dark</option>
-          <option value="theme-y2k-aero">🍬 Y2K Aero Pink</option>
-          <option value="theme-cyber-neon">🌐 Cyber Neon</option>
-        </select>
-      </div>
-      
-      <div class="user-badge">
-        <div class="avatar-box">📻</div>
-        <div class="user-meta">
-          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <strong>Station Main Live</strong>
-            <span id="online-users-badge" class="online-users-pill">👥 1 คน</span>
-          </div>
-          <span id="station-status" class="status-offline">○ Offline (Auto-DJ)</span>
-        </div>
-      </div>
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { maxHttpBufferSize: 1e7 });
 
-      <div class="side-content">
-        <!-- Winamp Chassis Player -->
-        <div class="section-box winamp-chassis">
-          <div class="section-title winamp-header-title">⚡ WINAMP AUDIO CONTROLLER ⚡</div>
-          <div class="now-playing-box winamp-screen">
-            <div class="lcd-glow-row">
-              <div id="track-title" class="track-title lcd-text">รอเริ่มรายการ</div>
-            </div>
-            <div id="track-artist" class="track-sub">Offline</div>
+app.set('trust proxy', true);
+app.use(express.static(path.join(__dirname, 'public')));
 
-            <div id="yt-screen-wrapper" class="yt-screen-container hide"></div>
+const ADMIN_SECRET_KEY = "0024252600";
 
-            <div class="track-timer-row">
-              <span id="track-time-current">00:00</span>
-              <div class="track-progress-bg"><div id="track-progress-fill" class="track-progress-fill"></div></div>
-              <span id="track-time-total">00:00</span>
-            </div>
+let adminSocketId = null;
+let currentBroadcaster = null;
+let isDJLive = false;
+let showStartedAt = null;
+let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
+let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨";
+let marqueeNotice = "✨ ยินดีต้อนรับสู่ Y2K Retro Radio คลื่นเพลงฮิตยุค 2000s • พิมพ์โค้ดสี MSN สั่นสะกิดจอ ส่งเพลงบอกความในใจได้ตลอด 24 ชม. ✨";
+let pinnedMessage = null;
+let playlist = [];
+let songRequests = [];
+let djQueue = [];
+let onlineUsersCount = 0;
+let currentVolumes = { music: 0.8, mic: 1.0 };
 
-            <!-- LED Block Spectrum Canvas -->
-            <canvas id="visualizer-canvas" class="visualizer-bar" width="300" height="64"></canvas>
-          </div>
-          <div class="btn-group">
-            <button id="btn-listen" class="y2k-btn primary-btn flex-1">▶ ฟังสถานีหลัก</button>
-            <button id="btn-open-request-modal" class="y2k-btn request-btn">📝 ขอเพลง</button>
-            <button id="btn-open-secret-modal" class="y2k-btn secret-btn" title="ส่งเพลงสารภาพรัก / ข้อความลับ">💌</button>
-          </div>
-        </div>
+const activeUsers = new Map();
 
-        <!-- Music Battle Box -->
-        <div id="music-battle-box" class="section-box hide">
-          <div class="section-title">⚔️ MUSIC BATTLE (โหวตเพลงสด)</div>
-          <div id="poll-question" style="font-weight: bold; font-size: 11px; margin-bottom: 6px; color: #1e40af;">...</div>
-          <div class="poll-bars-row">
-            <button id="btn-vote-a" class="poll-btn">A: <span id="poll-title-a"></span> (<span id="poll-votes-a">0</span>)</button>
-            <button id="btn-vote-b" class="poll-btn">B: <span id="poll-title-b"></span> (<span id="poll-votes-b">0</span>)</button>
-          </div>
-        </div>
+// ----------------------------------------------------
+// สถิติผู้เข้าชมจริง (Unique Device Token)
+// ----------------------------------------------------
+const STATS_FILE = path.join(__dirname, 'stats.json');
+let siteStats = { totalHits: 0, visitedTokens: [] };
 
-        <!-- Gifts -->
-        <div class="section-box">
-          <div class="section-title">🎁 ส่งของขวัญเสมือนให้ดีเจ</div>
-          <div class="sfx-grid">
-            <button type="button" class="sfx-btn gift-btn" data-gift="🌹 กุหลาบ">🌹 กุหลาบ</button>
-            <button type="button" class="sfx-btn gift-btn" data-gift="📀 แผ่นทอง">📀 แผ่นทอง</button>
-            <button type="button" class="sfx-btn gift-btn" data-gift="🧋 ชานม">🧋 ชานม</button>
-            <button type="button" class="sfx-btn gift-btn" data-gift="🌿 ยาดม">🌿 ยาดม</button>
-          </div>
-        </div>
+function loadSiteStats() {
+  try {
+    if (fs.existsSync(STATS_FILE)) {
+      siteStats = JSON.parse(fs.readFileSync(STATS_FILE, 'utf-8'));
+      if (!Array.isArray(siteStats.visitedTokens)) siteStats.visitedTokens = [];
+    } else {
+      siteStats = { totalHits: 0, visitedTokens: [] };
+      saveSiteStats();
+    }
+  } catch (err) {
+    siteStats = { totalHits: 0, visitedTokens: [] };
+  }
+}
 
-        <!-- Thai Tuner -->
-        <div class="section-box tuner-box">
-          <div class="section-title">Thai Radio Tuner (คลื่นวิทยุไทยสด)</div>
-          <select id="backup-station-select" class="y2k-select">
-            <option value="">-- เลือกคลื่นวิทยุไทยยอดนิยม --</option>
-            <optgroup label="🎵 เพลงสตริง / สากลฮิต">
-              <option value="https://stream.zeno.fm/0r0xa792kwzuv">CityPop & Retro Hits 80s-90s</option>
-              <option value="https://stream.zeno.fm/u2768tz918zuv">Thai Pop Radio Hits (เพลงไทยฮิต)</option>
-              <option value="https://icecast.bkwsu.eu/connectthailand.mp3">Connect Thailand Radio (24 ชม.)</option>
-            </optgroup>
-            <optgroup label="🌾 ลูกทุ่ง / หมอลำ / เพื่อชีวิต">
-              <option value="https://stream.zeno.fm/4wy075u3a0hvv">สถานีเพลงลูกทุ่ง & หมอลำ</option>
-              <option value="https://stream.zeno.fm/k2k5uuv3a0hvv">เพลงเพื่อชีวิต อมตะ</option>
-            </optgroup>
-          </select>
-          <audio id="backup-audio-player" controls preload="none" style="width: 100%; height: 28px; margin-top: 6px;"></audio>
-        </div>
+function saveSiteStats() {
+  try {
+    fs.writeFileSync(STATS_FILE, JSON.stringify(siteStats, null, 2), 'utf-8');
+  } catch (err) {}
+}
+loadSiteStats();
 
-        <!-- Broadcast Booth -->
-        <div class="section-box dj-panel">
-          <div class="section-title">Broadcast Booth</div>
-          
-          <div id="dj-login-section" class="btn-group">
-            <button id="btn-open-login-modal" class="y2k-btn primary-btn flex-1">🔐 เข้าสู่ระบบดีเจ/แอดมิน</button>
-            <button id="btn-open-register-modal" class="y2k-btn request-btn">📝 สมัครดีเจ</button>
-          </div>
+const AUTO_DJ_PLAYLIST = [
+  { videoId: '5qap5aO4i9A', title: 'Lofi Hip Hop - Chill Beats 2000s' },
+  { videoId: 'jfKfPfyJRdk', title: 'Lofi Girl - Relaxing Radio' },
+  { videoId: '7NOSDKb0HlU', title: 'Retro Y2K Pop Melodies' }
+];
+let autoDjIndex = 0;
+let activePoll = null;
 
-          <div id="dj-portal-section" class="hide" style="text-align: center; padding: 10px; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 4px; margin-bottom: 6px;">
-            <div style="font-weight: bold; color: #0369a1;">👋 ยินดีต้อนรับ: <span id="dj-portal-name">DJ</span></div>
-            <p style="font-size: 11px; color: #0284c7; margin: 4px 0 8px;">เมื่อพร้อมเปิดเพลง ให้กดปุ่มเพื่อส่งคำขอถึงแอดมิน</p>
-            <button id="btn-request-to-live" class="y2k-btn on-air-btn" style="width: 100%;">✋ ขอขึ้นจัดรายการสด</button>
-            <div id="dj-portal-waiting-text" class="hide" style="font-weight: bold; color: #d97706; margin-top: 6px; font-size: 11px;">
-              ⏳ ส่งคำขอแล้ว! กำลังรอแอดมินกดอนุมัติ...
-            </div>
-            <button id="btn-dj-portal-logout" class="y2k-btn logout-btn" style="margin-top: 6px;">🚪 ออกจากระบบ</button>
-          </div>
+function getThaiTime() {
+  return new Date().toLocaleTimeString('th-TH', {
+    timeZone: 'Asia/Bangkok',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+}
 
-          <div id="dj-controls-section" class="dj-controls hide">
-            <div class="dj-header-bar">
-              <span id="role-badge" class="dj-badge-status">🎧 สิทธิ์: กำลังโหลด</span>
-              <button type="button" id="btn-dj-logout" class="y2k-btn logout-btn">🚪 ออกจากระบบ</button>
-            </div>
+function getTodayString() {
+  const d = new Date();
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+}
+let currentDay = getTodayString();
 
-            <div class="btn-group" style="margin-bottom: 6px;">
-              <button id="btn-record-show" class="y2k-btn" style="flex: 1;">⏺️ บันทึกรายการ</button>
-              <button id="btn-open-battle-modal" class="y2k-btn" style="flex: 1;">⚔️ เปิดโหวตเพลง</button>
-            </div>
+const BANNED_FILE = path.join(__dirname, 'banned_users.json');
+let bannedList = [];
 
-            <div id="admin-approval-panel" class="admin-panel hide">
-              <div class="sfx-title">👑 คิวดีเจที่รออนุมัติ <span>(<span id="dj-queue-count">0</span>)</span></div>
-              <ul id="dj-approval-list" class="requests-list">
-                <li>ไม่มีดีเจรออนุมัติ</li>
-              </ul>
-            </div>
+function loadBannedList() {
+  try {
+    if (fs.existsSync(BANNED_FILE)) bannedList = JSON.parse(fs.readFileSync(BANNED_FILE, 'utf-8'));
+    else { bannedList = []; saveBannedList(); }
+  } catch (err) { bannedList = []; }
+}
+function saveBannedList() {
+  try { fs.writeFileSync(BANNED_FILE, JSON.stringify(bannedList, null, 2), 'utf-8'); } catch (err) {}
+}
+loadBannedList();
 
-            <div id="admin-registered-djs-box" class="admin-panel hide" style="margin-top: 6px;">
-              <div class="sfx-title">📋 ดีเจที่ลงทะเบียนไว้ <span>(<span id="reg-dj-count">0</span>)</span></div>
-              <ul id="registered-djs-list" class="requests-list">
-                <li>ยังไม่มีดีเจลงทะเบียน</li>
-              </ul>
-            </div>
+const CHAT_FILE = path.join(__dirname, 'chat_history.json');
+let chatHistory = [];
 
-            <div id="admin-banned-users-box" class="admin-panel hide" style="margin-top: 6px;">
-              <div class="sfx-title">🚫 รายชื่อผู้ใช้ที่ถูกแบน <span>(<span id="ban-user-count">0</span>)</span></div>
-              <ul id="banned-users-list" class="requests-list">
-                <li>ไม่มีรายชื่อถูกแบน</li>
-              </ul>
-            </div>
+const DJS_FILE = path.join(__dirname, 'djs_database.json');
+let registeredDJs = {};
 
-            <div class="upload-music-box">
-              <label for="dj-file-input" class="y2k-btn primary-btn upload-music-btn">
-                📂 + เลือกไฟล์ MP3 ในเครื่องเข้าคิว
-              </label>
-              <input type="file" id="dj-file-input" accept="audio/*" multiple style="display: none;">
-            </div>
+function loadRegisteredDJs() {
+  try {
+    if (fs.existsSync(DJS_FILE)) registeredDJs = JSON.parse(fs.readFileSync(DJS_FILE, 'utf-8'));
+    else { registeredDJs = {}; saveRegisteredDJs(); }
+  } catch (err) {}
+}
+function saveRegisteredDJs() {
+  try { fs.writeFileSync(DJS_FILE, JSON.stringify(registeredDJs, null, 2), 'utf-8'); } catch (err) {}
+}
+loadRegisteredDJs();
 
-            <div class="yt-input-box">
-              <span class="sub-label">▶ เพิ่มเพลงจาก YouTube เข้าคิว:</span>
-              <div class="input-row">
-                <input type="text" id="dj-yt-url" class="y2k-input flex-1" placeholder="วางลิงก์ เช่น https://youtu.be/...">
-                <button type="button" id="btn-play-yt" class="y2k-btn yt-play-btn">+ เพิ่ม</button>
-              </div>
-            </div>
+function loadChatHistory() {
+  try {
+    if (fs.existsSync(CHAT_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CHAT_FILE, 'utf-8'));
+      if (data.savedDay === currentDay && Array.isArray(data.history)) chatHistory = data.history;
+      else { chatHistory = []; saveChatHistory(); }
+    }
+  } catch (err) { chatHistory = []; }
+}
+function saveChatHistory() {
+  try { fs.writeFileSync(CHAT_FILE, JSON.stringify({ savedDay: currentDay, history: chatHistory }, null, 2), 'utf-8'); } catch (err) {}
+}
+loadChatHistory();
 
-            <div class="requests-queue-box">
-              <div class="sfx-title">📥 คำขอเพลง <span>(<span id="req-count">0</span>)</span></div>
-              <ul id="requests-list" class="requests-list">
-                <li>ยังไม่มีคำขอเพลง</li>
-              </ul>
-            </div>
+function checkDayReset() {
+  const today = getTodayString();
+  if (today !== currentDay) {
+    chatHistory = []; songRequests = []; pinnedMessage = null; currentDay = today;
+    todayTopic = "วันนี้เปิดรับทุกแนวเพลง ทักทายกันได้นะ!";
+    saveChatHistory();
+    io.emit('chat-history-cleared');
+    io.emit('topic-update', todayTopic);
+    io.emit('requests-update', songRequests);
+    io.emit('pinned-update', pinnedMessage);
+  }
+}
 
-            <div class="topic-setter-box">
-              <span class="sub-label">✏️ หัวข้อจัดรายการวันนี้:</span>
-              <div class="input-row">
-                <input type="text" id="dj-topic-input" class="y2k-input flex-1" placeholder="เช่น เอาใจคนอกหัก...">
-                <button id="btn-save-topic" class="y2k-btn">📢 ตั้งหัวข้อ</button>
-              </div>
-            </div>
+function startAutoDJ() {
+  if (isDJLive) return;
+  const track = AUTO_DJ_PLAYLIST[autoDjIndex % AUTO_DJ_PLAYLIST.length];
+  autoDjIndex++;
+  const startedAt = Date.now();
+  currentTrack = {
+    title: `[Auto-DJ] ${track.title}`,
+    artist: "Y2K Bot Station",
+    duration: 0,
+    youtubeId: track.videoId,
+    startedAt: startedAt
+  };
+  io.emit('track-update', currentTrack);
+  io.emit('play-youtube-track', {
+    videoId: track.videoId,
+    title: currentTrack.title,
+    seekTo: 0
+  });
+}
 
-            <!-- กล่องตั้งค่าข้อความวิ่ง Marquee สำหรับดีเจ/แอดมิน -->
-            <div class="topic-setter-box" style="margin-top: 6px;">
-              <span class="sub-label">📜 ข้อความวิ่งหัวเว็บ (Marquee):</span>
-              <div class="input-row">
-                <input type="text" id="dj-marquee-input" class="y2k-input flex-1" placeholder="พิมพ์ข้อความวิ่งใหม่...">
-                <button type="button" id="btn-save-marquee" class="y2k-btn">📢 อัปเดต</button>
-              </div>
-            </div>
+function getClientIp(socket) {
+  const forwarded = socket.handshake.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return socket.handshake.address || socket.conn.remoteAddress;
+}
 
-            <div class="moderation-box">
-              <span class="sub-label">📌 ปักหมุดประกาศแชท:</span>
-              <div class="input-row">
-                <input type="text" id="dj-pin-input" class="y2k-input flex-1" placeholder="พิมพ์ข้อความปักหมุด...">
-                <button id="btn-pin-msg" class="y2k-btn">📌 ปักหมุด</button>
-                <button id="btn-unpin-msg" class="y2k-btn" title="ปลดหมุด">❌</button>
-              </div>
-              <button id="btn-clear-chat" class="y2k-btn danger-btn" style="width: 100%; margin-top: 5px;">🧹 ล้างหน้าจอแชท</button>
-            </div>
+io.on('connection', (socket) => {
+  const clientIp = getClientIp(socket);
 
-            <div class="show-control-group" style="margin-top: 8px;">
-              <button id="btn-show-toggle" class="y2k-btn on-air-btn">🔴 เริ่มจัดรายการ (Go Live)</button>
-            </div>
+  if (bannedList.some(b => b.ip === clientIp)) {
+    socket.emit('banned-notice', { reason: "คุณถูกระงับการเข้าใช้งานสถานีชั่วคราว" });
+    socket.disconnect(true);
+    return;
+  }
 
-            <div id="dj-broadcast-tools" class="broadcast-tools hide">
-              <div class="btn-group">
-                <button id="btn-mic" class="y2k-btn">🎙️ เปิดไมค์</button>
-                <button id="btn-pause-music" class="y2k-btn" title="พักเพลงชั่วคราวเพื่อพูดคุยกับผู้ฟัง">⏸️ พักเพลง</button>
-                <button id="btn-play-music" class="y2k-btn">🎵 เพลงถัดไป</button>
-              </div>
+  onlineUsersCount++;
+  io.emit('online-users-count', onlineUsersCount);
 
-              <div class="sfx-box">
-                <div class="sfx-title">📢 DJ Sound FX & Scratch</div>
-                <div class="sfx-grid">
-                  <button type="button" class="sfx-btn" data-sound="airhorn">📯 แตร Horn</button>
-                  <button type="button" class="sfx-btn" data-sound="rimshot">🥁 ตึ่งโป๊ะ!</button>
-                  <button type="button" class="sfx-btn" data-sound="scratch">💿 Scratch แผ่น</button>
-                  <button type="button" class="sfx-btn" data-sound="tape">📼 เทปยาน</button>
-                </div>
-              </div>
+  socket.on('register-visitor', (visitorToken) => {
+    if (visitorToken && !siteStats.visitedTokens.includes(visitorToken)) {
+      siteStats.visitedTokens.push(visitorToken);
+      siteStats.totalHits = siteStats.visitedTokens.length;
+      saveSiteStats();
+      io.emit('hit-counter-update', siteStats.totalHits);
+    } else {
+      socket.emit('hit-counter-update', siteStats.totalHits || 1);
+    }
+  });
 
-              <div class="mixer-box">
-                <div class="mixer-title">🎚️ DJ Audio Mixer</div>
-                <div class="slider-item">
-                  <div class="slider-header">
-                    <span>🎵 เสียงเพลง (Music)</span>
-                    <span id="label-music-vol" class="vol-badge">80%</span>
-                  </div>
-                  <input type="range" id="slider-music-vol" class="y2k-range" min="0" max="100" value="80">
-                </div>
-                <div class="slider-item">
-                  <div class="slider-header">
-                    <span>🎙️ เสียงไมค์ (Mic)</span>
-                    <span id="label-mic-vol" class="vol-badge">100%</span>
-                  </div>
-                  <input type="range" id="slider-mic-vol" class="y2k-range" min="0" max="150" value="100">
-                </div>
-                <button type="button" id="btn-ducking" class="y2k-btn ducking-btn">🔉 หรี่เพลงพูดไมค์ (Ducking)</button>
-              </div>
-            </div>
-          </div>
-        </div>
+  socket.on('check-or-set-username', (newUsername, callback) => {
+    const cleanName = (newUsername || '').trim();
+    if (!cleanName) {
+      return callback({ success: false, message: "กรุณาระบุชื่อเล่นของคุณ!" });
+    }
 
-        <!-- Badges & Hit Counter -->
-        <div class="section-box y2k-badges-box">
-          <div class="hit-counter-container">
-            <span class="hit-label">VISITOR COUNT:</span>
-            <div id="hit-counter-digits" class="hit-digits">000001</div>
-          </div>
-          <div class="badges-row">
-            <span class="micro-badge winamp-badge">WINAMP 2.91</span>
-            <span class="micro-badge ie-badge">IE 6.0 READY</span>
-            <span class="micro-badge html-badge">HTML 4.01</span>
-          </div>
-        </div>
-      </div>
-    </aside>
+    for (const [sId, name] of activeUsers.entries()) {
+      if (sId !== socket.id && name.toLowerCase() === cleanName.toLowerCase()) {
+        return callback({ 
+          success: false, 
+          message: `ชื่อ "${cleanName}" มีผู้ใช้งานอยู่ในห้องสนทนาแล้ว กรุณาใช้ชื่ออื่น!` 
+        });
+      }
+    }
 
-    <!-- คอลัมน์ที่ 2 (กลาง): ห้องแชท MSN Messenger Edition -->
-    <main class="window-pane chat-window">
-      <div class="window-header">
-        <span class="icon-bubble">💬</span>
-        <span class="title">Live Chat & Shoutbox (MSN Edition)</span>
-        <label style="margin-left: auto; font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
-          <input type="checkbox" id="chk-msn-sound" checked> 🔊 เสียง MSN
-        </label>
-      </div>
+    activeUsers.set(socket.id, cleanName);
+    socket.currentNick = cleanName;
+    callback({ success: true, name: cleanName });
+  });
 
-      <div class="marquee-ticker">
-        <marquee id="marquee-text" scrollamount="4" behavior="scroll" direction="left">
-          🎵 Y2K Retro Radio • ฟังเพลงฮิตยุค 2000s ลื่นไหลตลอดวัน • พิมพ์คุยในแชทและขอเพลงโปรดของคุณได้ทันที ✨
-        </marquee>
-      </div>
+  checkDayReset();
+  socket.emit('dj-status-update', { isLive: isDJLive, startedAt: showStartedAt });
 
-      <div class="topic-banner">
-        <div class="topic-tag">🌟 TOPIC TODAY</div>
-        <div id="display-topic" class="topic-text">กำลังโหลดหัวข้อ...</div>
-      </div>
+  let trackToSend = { ...currentTrack };
+  if (currentTrack.youtubeId && currentTrack.startedAt) {
+    trackToSend.seekTo = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
+  }
+  socket.emit('track-update', trackToSend);
 
-      <div id="pinned-banner" class="pinned-banner hide">
-        <span class="pinned-icon">📌</span>
-        <span id="pinned-text" class="pinned-text"></span>
-      </div>
+  if (currentTrack.youtubeId) {
+    socket.emit('play-youtube-track', {
+      videoId: currentTrack.youtubeId,
+      title: currentTrack.title,
+      seekTo: trackToSend.seekTo || 0
+    });
+  }
 
-      <div id="chat-tabs-header" class="chat-tab-bar">
-        <div class="tab active" data-tab="general">💬 General Room</div>
-      </div>
+  socket.emit('topic-update', todayTopic);
+  socket.emit('marquee-update', marqueeNotice);
+  socket.emit('pinned-update', pinnedMessage);
+  socket.emit('volume-update', currentVolumes);
+  socket.emit('playlist-update', playlist);
+  socket.emit('requests-update', songRequests);
+  socket.emit('chat-history', chatHistory);
+  if (activePoll) socket.emit('poll-update', activePoll);
 
-      <div id="chat-logs-container" class="chat-logs-wrapper">
-        <div id="chat-logs" class="chat-logs tab-pane active"></div>
-      </div>
+  socket.on('dj-set-marquee', (newNotice) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    marqueeNotice = (newNotice || '').trim() || "✨ ยินดีต้อนรับสู่ Y2K Retro Radio ✨";
+    io.emit('marquee-update', marqueeNotice);
+  });
 
-      <div class="chat-input-area">
-        <div id="typing-indicator" class="typing-status hide"></div>
-        <div class="chat-toolbar">
-          <button type="button" id="btn-bold" class="tool-btn"><b>B</b></button>
-          <button type="button" id="btn-italic" class="tool-btn"><i>I</i></button>
-          <button type="button" id="btn-underline" class="tool-btn"><u>U</u></button>
-          
-          <div class="pop-wrapper">
-            <button type="button" id="btn-emoji" class="tool-btn">😊</button>
-            <div id="emoji-menu" class="emoji-picker hide">
-              <span>😀</span><span>😎</span><span>😜</span><span>😍</span><span>🥺</span>
-              <span>😭</span><span>🔥</span><span>✨</span><span>🎉</span><span>❤️</span>
-            </div>
-          </div>
+  socket.on('dj-pause-track', () => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    io.emit('radio-pause-track');
+  });
 
-          <div class="pop-wrapper">
-            <button type="button" id="btn-winks-menu" class="tool-btn" title="ส่ง MSN Winks แฟลชเต็มจอ">✨</button>
-            <div id="winks-picker" class="emoji-picker hide" style="width: 140px; grid-template-columns: 1fr;">
-              <span data-wink="kiss">💋 จูบยักษ์ชนจอ</span>
-              <span data-wink="bomb">💣 ระเบิดตู้ม</span>
-              <span data-wink="water">🌊 สาดน้ำเต็มจอ</span>
-            </div>
-          </div>
+  socket.on('dj-resume-track', () => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    io.emit('radio-resume-track');
+  });
 
-          <label class="color-picker-label tool-btn" title="เปลี่ยนสีข้อความ">
-            🎨
-            <input type="color" id="chat-color" value="#000000">
-          </label>
-          <button type="button" id="btn-heart-reaction" class="tool-btn heart-btn" title="กดส่งหัวใจ">💖</button>
-          <button type="button" id="btn-nudge" class="tool-btn nudge-btn" title="ส่งสัญญาณสะกิด MSN สั่นหน้าจอ!">💥 สะกิด</button>
-        </div>
+  socket.on('dj-track-ended', () => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    currentTrack.youtubeId = null;
+    currentTrack.startedAt = null;
+    currentTrack.title = "จบเพลงแล้ว (รอคิวถัดไป)";
+    io.emit('track-update', currentTrack);
+    io.emit('dj-stop-youtube');
+  });
 
-        <div class="input-row" style="margin-bottom: 5px;">
-          <select id="user-online-status" class="y2k-select" style="width: 120px;">
-            <option value="🟢 ออนไลน์">🟢 ออนไลน์</option>
-            <option value="🔴 ไม่ว่าง">🔴 ไม่ว่าง</option>
-            <option value="🟡 ไม่อยู่">🟡 ไม่อยู่</option>
-            <option value="☕ ไปพัก">☕ ไปพัก</option>
-          </select>
-          <input type="text" id="username" class="y2k-input" placeholder="ชื่อเล่น" style="width: 130px;">
-          <input type="text" id="userstatus" class="y2k-input flex-1" placeholder="สเตตัส MSN (จะขึ้น Now Listening อัตโนมัติเมื่อฟังเพลง)">
-        </div>
+  socket.on('chat-message', (data) => {
+    checkDayReset();
+    const cleanUser = (data.user || 'Guest').trim();
 
-        <div class="input-row">
-          <input type="text" id="chat-message" class="y2k-input flex-1" placeholder="พิมพ์ข้อความ (รองรับ ·$4โค้ดสี·$1 หรือ (H) (K) (F))...">
-          <button id="btn-send" class="y2k-btn jelly-btn">Send</button>
-        </div>
-      </div>
-      
-      <div class="banner-bottom"><span>Retro Sound Wave 2000 • Winamp Spectrum • High Fidelity Stereo</span></div>
-    </main>
+    for (const [sId, name] of activeUsers.entries()) {
+      if (sId !== socket.id && name.toLowerCase() === cleanUser.toLowerCase()) {
+        socket.emit('name-conflict-alert', `ชื่อ "${cleanUser}" ซ้ำกับผู้ใช้งานคนอื่น กรุณาเปลี่ยนชื่อก่อนส่งข้อความ!`);
+        return;
+      }
+    }
 
-    <!-- คอลัมน์ที่ 3 (ขวา): หน้าต่างคิวเพลงโดยเฉพาะ (Playlist Queue Window) -->
-    <aside class="window-pane playlist-window-pane">
-      <div class="window-header">
-        <span class="icon-flower">🎵</span>
-        <span class="title">Winamp Playlist (<span id="right-queue-count">0</span>)</span>
-      </div>
-      
-      <div class="playlist-pane-content">
-        <div class="studio-playlist-header">
-          <strong style="color: #0c4383; font-size: 12px;">📋 คิวเพลงสตูดิโอ (On-Air Queue)</strong>
-          <div style="font-size: 10px; color: #64748b; margin-top: 2px;">คลิก 🔼 🔽 เพื่อสลับคิว หรือ 🗑️ เพื่อลบเพลง</div>
-        </div>
+    activeUsers.set(socket.id, cleanUser);
+    socket.currentNick = cleanUser;
 
-        <ul id="playlist-container" class="studio-playlist-list">
-          <li>ไม่มีรายการเพลง</li>
-        </ul>
-      </div>
+    const newMsg = {
+      id: Date.now() + Math.random().toString(36).substring(2, 5),
+      senderSocketId: socket.id,
+      user: cleanUser,
+      status: data.status || '',
+      text: data.text,
+      style: data.style || {},
+      role: socket.userRole || 'listener',
+      time: getThaiTime()
+    };
+    chatHistory.push(newMsg);
+    saveChatHistory();
+    io.emit('chat-message', newMsg);
+  });
 
-      <div class="playlist-footer-bar">
-        <span style="font-size: 10px; color: #475569; font-weight: bold;">⚡ Auto-Loop Next Active</span>
-      </div>
-    </aside>
-  </div>
+  socket.on('private-whisper', (data) => {
+    const targetSocket = io.sockets.sockets.get(data.targetSocketId);
+    const whisperPayload = {
+      senderSocketId: socket.id,
+      fromUser: data.fromUser || 'Guest',
+      toUser: data.toUser,
+      text: data.text,
+      time: getThaiTime()
+    };
+    if (targetSocket) {
+      targetSocket.emit('receive-whisper', whisperPayload);
+      socket.emit('receive-whisper', whisperPayload);
+    }
+  });
 
-  <!-- Modal ขอเพลง -->
-  <div id="request-modal" class="y2k-modal-overlay hide">
-    <div class="window-pane modal-box">
-      <div class="window-header">
-        <span class="icon-flower">📝</span>
-        <span class="title">กล่องขอเพลงถึงดีเจ</span>
-      </div>
-      <div class="modal-body">
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">ชื่อเพลง + ศิลปิน (หรือลิงก์ YouTube):</label>
-          <input type="text" id="req-song-input" class="y2k-input" placeholder="เช่น วัดใจ - Silly Fools หรือ ลิงก์เพลง" style="width: 100%; margin-top: 3px;">
-        </div>
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">ข้อความฝากถึงดีเจ / คนพิเศษ:</label>
-          <input type="text" id="req-note-input" class="y2k-input" placeholder="เช่น มอบให้เพื่อนๆ..." style="width: 100%; margin-top: 3px;">
-        </div>
-        <div class="modal-actions">
-          <button id="req-btn-submit" class="y2k-btn">ส่งคำขอเพลง 🎵</button>
-          <button id="req-btn-cancel" class="y2k-btn">ยกเลิก</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  socket.on('send-wink', (winkType) => {
+    io.emit('receive-wink', {
+      user: socket.currentNick || socket.djName || 'ใครบางคน',
+      type: winkType
+    });
+  });
 
-  <!-- Modal สารภาพรัก -->
-  <div id="secret-modal" class="y2k-modal-overlay hide">
-    <div class="window-pane modal-box">
-      <div class="window-header">
-        <span class="icon-flower">💌</span>
-        <span class="title">กล่องสารภาพรัก / ข้อความลับนิรนาม</span>
-      </div>
-      <div class="modal-body">
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">ชื่อเพลงที่อยากมอบให้:</label>
-          <input type="text" id="sec-song-input" class="y2k-input" placeholder="เช่น ดาว - Pause" style="width: 100%; margin-top: 3px;">
-        </div>
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">ข้อความสารภาพความในใจ (จะไม่เปิดเผยชื่อผู้ส่ง):</label>
-          <textarea id="sec-note-input" class="y2k-input" placeholder="พิมพ์ความรู้สึกในใจส่งถึงใครบางคน..." style="width: 100%; height: 60px; margin-top: 3px;"></textarea>
-        </div>
-        <div class="modal-actions">
-          <button id="sec-btn-submit" class="y2k-btn primary-btn">ส่งข้อความลับ 💌</button>
-          <button id="sec-btn-cancel" class="y2k-btn">ยกเลิก</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  socket.on('dj-create-poll', (pollData) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    activePoll = {
+      title: pollData.title || "Music Battle!",
+      songA: pollData.songA,
+      songB: pollData.songB,
+      votesA: 0,
+      votesB: 0,
+      voters: []
+    };
+    io.emit('poll-update', activePoll);
+  });
 
-  <!-- Modal Music Battle -->
-  <div id="battle-modal" class="y2k-modal-overlay hide">
-    <div class="window-pane modal-box">
-      <div class="window-header">
-        <span class="icon-flower">⚔️</span>
-        <span class="title">เปิดศึก Music Battle</span>
-      </div>
-      <div class="modal-body">
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">หัวข้อประชัน:</label>
-          <input type="text" id="battle-title-input" class="y2k-input" placeholder="เช่น Clash vs Silly Fools" style="width: 100%; margin-top: 3px;">
-        </div>
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">ตัวเลือกเพลง A:</label>
-          <input type="text" id="battle-song-a" class="y2k-input" placeholder="เช่น กอด - Clash" style="width: 100%; margin-top: 3px;">
-        </div>
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">ตัวเลือกเพลง B:</label>
-          <input type="text" id="battle-song-b" class="y2k-input" placeholder="เช่น จิ๊จ๊ะ - Silly Fools" style="width: 100%; margin-top: 3px;">
-        </div>
-        <div class="modal-actions">
-          <button id="battle-btn-start" class="y2k-btn on-air-btn">เปิดโหวตสดทันที</button>
-          <button id="battle-btn-cancel" class="y2k-btn">ยกเลิก</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  socket.on('cast-vote', (option) => {
+    if (!activePoll) return;
+    if (activePoll.voters.includes(socket.id)) return;
+    activePoll.voters.push(socket.id);
+    if (option === 'A') activePoll.votesA++;
+    if (option === 'B') activePoll.votesB++;
+    io.emit('poll-update', activePoll);
+  });
 
-  <!-- Modal ล็อกอินดีเจ / แอดมิน -->
-  <div id="login-modal" class="y2k-modal-overlay hide">
-    <div class="window-pane modal-box">
-      <div class="window-header">
-        <span class="icon-flower">🔐</span>
-        <span class="title">เข้าสู่ระบบ (แอดมิน / ดีเจ)</span>
-      </div>
-      <div class="modal-body">
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">ชื่อจัดรายการ (ดีเจ):</label>
-          <input type="text" id="login-user-input" class="y2k-input" placeholder="หากเป็นแอดมินเว้นว่างได้" style="width: 100%; margin-top: 3px;">
-        </div>
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">รหัสผ่าน (Admin Key หรือ รหัสดีเจ):</label>
-          <input type="password" id="login-pass-input" class="y2k-input" placeholder="ใส่รหัสผ่าน..." style="width: 100%; margin-top: 3px;">
-        </div>
-        <div id="login-error" class="error-msg hide"></div>
-        <div class="modal-actions">
-          <button id="login-btn-confirm" class="y2k-btn">เข้าสู่ระบบ</button>
-          <button id="login-btn-cancel" class="y2k-btn">ยกเลิก</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  socket.on('dj-end-poll', () => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    if (!activePoll) return;
+    const winner = activePoll.votesA >= activePoll.votesB ? activePoll.songA : activePoll.songB;
+    io.emit('system-announcement', `🏆 ผลโหวตชนะเลิศ: "${winner}" ได้รับคะแนนสูงสุด!`);
+    playlist.unshift({ name: `▶ [โหวตชนะ] ${winner}`, type: 'youtube', videoId: '' });
+    io.emit('playlist-update', playlist);
+    activePoll = null;
+    io.emit('poll-update', null);
+  });
 
-  <!-- Modal สมัครดีเจ -->
-  <div id="register-modal" class="y2k-modal-overlay hide">
-    <div class="window-pane modal-box">
-      <div class="window-header">
-        <span class="icon-flower">📝</span>
-        <span class="title">ลงทะเบียนสมัครเป็นดีเจ</span>
-      </div>
-      <div class="modal-body">
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">ชื่อที่จะใช้ในการจัดรายการ:</label>
-          <input type="text" id="reg-user-input" class="y2k-input" placeholder="เช่น DJ Bankz, ดีเจพี่ป้อม" style="width: 100%; margin-top: 3px;">
-        </div>
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">กำหนดรหัสผ่านของตัวเอง:</label>
-          <input type="password" id="reg-pass-input" class="y2k-input" placeholder="กำหนดรหัสผ่าน..." style="width: 100%; margin-top: 3px;">
-        </div>
-        <div id="reg-error" class="error-msg hide"></div>
-        <div class="modal-actions">
-          <button id="reg-btn-confirm" class="y2k-btn primary-btn">ยืนยันการสมัคร</button>
-          <button id="reg-btn-cancel" class="y2k-btn">ยกเลิก</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  socket.on('submit-secret-dedication', (data) => {
+    const item = {
+      id: Date.now(),
+      user: "💌 ผู้ไม่ประสงค์ออกนาม (ความลับ)",
+      song: data.song,
+      note: `[สารภาพรัก/ข้อความลับ]: ${data.note || ''}`,
+      time: getThaiTime()
+    };
+    songRequests.push(item);
+    io.emit('requests-update', songRequests);
+  });
 
-  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=80"></script>
-</body>
-</html>
+  socket.on('admin-kick-user', (targetSocketId) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    const target = io.sockets.sockets.get(targetSocketId);
+    if (target) {
+      if (target.userRole === 'admin') return;
+      target.emit('kicked-notice', { reason: "คุณถูกเตะออกจากห้องสนทนาโดยผู้ดูแลระบบ" });
+      target.disconnect(true);
+      io.emit('system-announcement', `👢 สมาชิกคนหนึ่งถูกเชิญออกจากห้องสนทนา`);
+    }
+  });
+
+  socket.on('admin-ban-user', (targetSocketId) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    const target = io.sockets.sockets.get(targetSocketId);
+    if (target) {
+      if (target.userRole === 'admin') return;
+      const targetIp = getClientIp(target);
+      const targetName = target.currentNick || target.djName || 'Guest';
+
+      if (!bannedList.some(b => b.ip === targetIp)) {
+        bannedList.push({
+          ip: targetIp,
+          username: targetName,
+          reason: "ถูกระงับสิทธิ์การใช้งานโดยผู้ดูแลระบบ",
+          bannedAt: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })
+        });
+        saveBannedList();
+      }
+
+      target.emit('banned-notice', { reason: "คุณถูกแบนออกจากระบบอย่างถาวร" });
+      target.disconnect(true);
+      io.emit('system-announcement', `🚫 [ระบบ] ผู้ใช้ "${targetName}" ถูกแบนออกจากสถานี`);
+      if (adminSocketId) io.to(adminSocketId).emit('admin-banned-list-update', bannedList);
+    }
+  });
+
+  socket.on('admin-unban-ip', (ipToUnban) => {
+    if (socket.userRole !== 'admin') return;
+    bannedList = bannedList.filter(b => b.ip !== ipToUnban);
+    saveBannedList();
+    socket.emit('admin-banned-list-update', bannedList);
+  });
+
+  socket.on('dj-register', (data, callback) => {
+    const cleanUser = (data.username || '').trim();
+    const cleanPass = (data.password || '').trim();
+    if (!cleanUser || !cleanPass) return callback({ success: false, message: "กรุณากรอกชื่อและรหัสผ่าน!" });
+    if (cleanUser.toLowerCase() === 'admin' || cleanPass === ADMIN_SECRET_KEY) return callback({ success: false, message: "ชื่อนี้สงวนไว้สำหรับแอดมิน!" });
+    if (registeredDJs[cleanUser]) return callback({ success: false, message: "ชื่อจัดรายการนี้มีผู้ใช้งานแล้ว!" });
+
+    registeredDJs[cleanUser] = cleanPass;
+    saveRegisteredDJs();
+    if (adminSocketId) io.to(adminSocketId).emit('admin-registered-djs-update', Object.keys(registeredDJs));
+    callback({ success: true, message: "สมัครบัญชีดีเจสำเร็จ!" });
+  });
+
+  socket.on('auth-login', (data, callback) => {
+    const cleanUser = (data.username || '').trim();
+    const cleanPass = (data.password || '').trim();
+
+    if (cleanPass === ADMIN_SECRET_KEY) {
+      socket.userRole = 'admin';
+      socket.djName = cleanUser || 'Super Admin';
+      adminSocketId = socket.id;
+      callback({ success: true, role: 'admin', name: socket.djName });
+      socket.emit('admin-dj-queue-update', djQueue);
+      socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
+      socket.emit('admin-banned-list-update', bannedList);
+      return;
+    }
+
+    if (registeredDJs[cleanUser] && registeredDJs[cleanUser] === cleanPass) {
+      socket.userRole = 'dj_member';
+      socket.djName = cleanUser;
+      callback({ success: true, role: 'dj_member', name: cleanUser });
+      return;
+    }
+
+    callback({ success: false, message: "ชื่อหรือรหัสผ่านไม่ถูกต้อง!" });
+  });
+
+  socket.on('admin-delete-dj', (djNameToDelete) => {
+    if (socket.userRole !== 'admin') return;
+    delete registeredDJs[djNameToDelete];
+    saveRegisteredDJs();
+    socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
+  });
+
+  socket.on('dj-request-queue', () => {
+    if (socket.userRole !== 'dj_member') return;
+    if (!djQueue.some(q => q.socketId === socket.id)) {
+      djQueue.push({ socketId: socket.id, username: socket.djName, time: getThaiTime() });
+    }
+    socket.emit('dj-queue-waiting');
+    if (adminSocketId) io.to(adminSocketId).emit('admin-dj-queue-update', djQueue);
+  });
+
+  socket.on('admin-approve-dj', (djSocketId) => {
+    if (socket.userRole !== 'admin') return;
+    const djIdx = djQueue.findIndex(q => q.socketId === djSocketId);
+    if (djIdx !== -1) {
+      const approvedDj = djQueue.splice(djIdx, 1)[0];
+      const targetSocket = io.sockets.sockets.get(djSocketId);
+      if (targetSocket) {
+        targetSocket.userRole = 'dj';
+        targetSocket.emit('dj-approved', approvedDj.username);
+      }
+      io.to(adminSocketId).emit('admin-dj-queue-update', djQueue);
+    }
+  });
+
+  socket.on('admin-reject-dj', (djSocketId) => {
+    if (socket.userRole !== 'admin') return;
+    djQueue = djQueue.filter(q => q.socketId !== djSocketId);
+    const targetSocket = io.sockets.sockets.get(djSocketId);
+    if (targetSocket) {
+      targetSocket.userRole = 'dj_member';
+      targetSocket.emit('dj-rejected');
+    }
+    io.to(adminSocketId).emit('admin-dj-queue-update', djQueue);
+  });
+
+  socket.on('dj-start-show', () => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    isDJLive = true;
+    showStartedAt = Date.now();
+    currentBroadcaster = { socketId: socket.id, role: socket.userRole, username: socket.djName };
+    io.emit('dj-status-update', { isLive: true, startedAt: showStartedAt });
+  });
+
+  socket.on('dj-end-show', () => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    isDJLive = false;
+    showStartedAt = null;
+    currentBroadcaster = null;
+    currentTrack = { title: "จบรายการแล้ว", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
+    io.emit('dj-status-update', { isLive: false, startedAt: null });
+    io.emit('track-update', currentTrack);
+    io.emit('dj-stop-youtube');
+    startAutoDJ();
+  });
+
+  socket.on('dj-play-youtube', (ytData) => {
+    if (!isDJLive) return;
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+
+    const startedAt = Date.now();
+    currentTrack = {
+      title: ytData.title || "YouTube Audio",
+      artist: socket.userRole === 'admin' ? "Super Admin" : `DJ ${socket.djName}`,
+      duration: 0,
+      youtubeId: ytData.videoId,
+      startedAt: startedAt
+    };
+
+    io.emit('track-update', currentTrack);
+    io.emit('play-youtube-track', {
+      videoId: ytData.videoId,
+      title: ytData.title,
+      seekTo: 0
+    });
+  });
+
+  socket.on('dj-add-youtube-to-playlist', async (item) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+
+    let songTitle = `YouTube Track [${item.videoId}]`;
+    const ytUrl = `https://www.youtube.com/watch?v=${item.videoId}`;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+      const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(ytUrl)}&format=json`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const info = await response.json();
+        if (info && info.title) songTitle = info.title;
+      }
+    } catch (err) {}
+
+    playlist.push({
+      name: `▶ [YT] ${songTitle}`,
+      type: 'youtube',
+      videoId: item.videoId
+    });
+
+    io.emit('playlist-update', playlist);
+  });
+
+  socket.on('dj-audio-stream', (data) => {
+    if (!isDJLive || (socket.userRole !== 'admin' && socket.userRole !== 'dj')) return;
+    socket.broadcast.emit('listener-audio-stream', data);
+  });
+
+  socket.on('dj-update-track', (data) => {
+    if (!isDJLive || (socket.userRole !== 'admin' && socket.userRole !== 'dj')) return;
+    currentTrack = data.track;
+    io.emit('track-update', currentTrack);
+  });
+
+  socket.on('dj-update-playlist', (list) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    playlist = list;
+    io.emit('playlist-update', playlist);
+  });
+
+  socket.on('dj-volume-change', (data) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    if (data.type === 'music') currentVolumes.music = data.volume;
+    if (data.type === 'mic') currentVolumes.mic = data.volume;
+    io.emit('volume-update', currentVolumes);
+  });
+
+  socket.on('dj-set-topic', (newTopic) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    todayTopic = newTopic.trim() || "เปิดเพลงสบายๆ สไตล์ Y2K";
+    io.emit('topic-update', todayTopic);
+  });
+
+  socket.on('dj-pin-message', (msgText) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    pinnedMessage = msgText ? msgText.trim() : null;
+    io.emit('pinned-update', pinnedMessage);
+  });
+
+  socket.on('dj-clear-chat', () => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    chatHistory = [];
+    saveChatHistory();
+    io.emit('chat-history-cleared');
+  });
+
+  socket.on('dj-play-sfx', (fxType) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    io.emit('play-sfx', fxType);
+  });
+
+  socket.on('submit-song-request', (reqData) => {
+    const item = {
+      id: Date.now(),
+      user: reqData.user || 'ผู้ฟังทางบ้าน',
+      song: reqData.song,
+      note: reqData.note || '',
+      time: getThaiTime()
+    };
+    songRequests.push(item);
+    io.emit('requests-update', songRequests);
+  });
+
+  socket.on('dj-accept-request', (reqId) => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    const reqIndex = songRequests.findIndex(r => r.id === reqId);
+    if (reqIndex !== -1) {
+      const r = songRequests.splice(reqIndex, 1)[0];
+      io.emit('requests-update', songRequests);
+      const announceMsg = {
+        user: "🎧 Studio",
+        status: "On Air",
+        text: `รับคิวเพลง "${r.song}" ของคุณ ${r.user} เรียบร้อยแล้ว!`,
+        style: { bold: true, color: "#b91c1c" },
+        role: socket.userRole,
+        time: getThaiTime()
+      };
+      chatHistory.push(announceMsg);
+      saveChatHistory();
+      io.emit('chat-message', announceMsg);
+    }
+  });
+
+  socket.on('send-reaction', (type) => io.emit('receive-reaction', type || '❤️'));
+  socket.on('send-nudge', (username) => io.emit('receive-nudge', { user: username || 'ใครบางคน' }));
+  socket.on('typing-start', (username) => socket.broadcast.emit('user-typing', { user: username || 'Guest', isTyping: true }));
+  socket.on('typing-stop', () => socket.broadcast.emit('user-typing', { isTyping: false }));
+
+  socket.on('disconnect', () => {
+    activeUsers.delete(socket.id);
+    onlineUsersCount = Math.max(0, onlineUsersCount - 1);
+    io.emit('online-users-count', onlineUsersCount);
+
+    djQueue = djQueue.filter(q => q.socketId !== socket.id);
+    if (adminSocketId) io.to(adminSocketId).emit('admin-dj-queue-update', djQueue);
+
+    if (currentBroadcaster && currentBroadcaster.socketId === socket.id) {
+      isDJLive = false;
+      showStartedAt = null;
+      currentBroadcaster = null;
+      io.emit('dj-status-update', { isLive: false, startedAt: null });
+      io.emit('dj-stop-youtube');
+      startAutoDJ();
+    }
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+  startAutoDJ();
+});
