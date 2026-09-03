@@ -29,7 +29,7 @@ let currentVolumes = { music: 0.8, mic: 1.0 };
 
 const activeUsers = new Map();
 
-// สถิติผู้เข้าชมจริง (Unique Device Token)
+// สถิติผู้เข้าชมจริง
 const STATS_FILE = path.join(__dirname, 'stats.json');
 let siteStats = { totalHits: 0, visitedTokens: [] };
 
@@ -86,7 +86,6 @@ function loadBannedList() {
     else { bannedList = []; saveBannedList(); }
   } catch (err) { bannedList = []; }
 }
-
 function saveBannedList() {
   try { fs.writeFileSync(BANNED_FILE, JSON.stringify(bannedList, null, 2), 'utf-8'); } catch (err) {}
 }
@@ -104,7 +103,6 @@ function loadRegisteredDJs() {
     else { registeredDJs = {}; saveRegisteredDJs(); }
   } catch (err) {}
 }
-
 function saveRegisteredDJs() {
   try { fs.writeFileSync(DJS_FILE, JSON.stringify(registeredDJs, null, 2), 'utf-8'); } catch (err) {}
 }
@@ -119,7 +117,6 @@ function loadChatHistory() {
     }
   } catch (err) { chatHistory = []; }
 }
-
 function saveChatHistory() {
   try { fs.writeFileSync(CHAT_FILE, JSON.stringify({ savedDay: currentDay, history: chatHistory }, null, 2), 'utf-8'); } catch (err) {}
 }
@@ -189,16 +186,11 @@ io.on('connection', (socket) => {
 
   socket.on('check-or-set-username', (newUsername, callback) => {
     const cleanName = (newUsername || '').trim();
-    if (!cleanName) {
-      return callback({ success: false, message: "กรุณาระบุชื่อเล่นของคุณ!" });
-    }
+    if (!cleanName) return callback({ success: false, message: "กรุณาระบุชื่อเล่นของคุณ!" });
 
     for (const [sId, name] of activeUsers.entries()) {
       if (sId !== socket.id && name.toLowerCase() === cleanName.toLowerCase()) {
-        return callback({ 
-          success: false, 
-          message: `ชื่อ "${cleanName}" มีผู้ใช้งานอยู่ในห้องสนทนาแล้ว กรุณาใช้ชื่ออื่น!` 
-        });
+        return callback({ success: false, message: `ชื่อ "${cleanName}" มีผู้ใช้งานอยู่ในห้องสนทนาแล้ว กรุณาใช้ชื่ออื่น!` });
       }
     }
 
@@ -303,10 +295,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('send-wink', (winkType) => {
-    io.emit('receive-wink', {
-      user: socket.currentNick || socket.djName || 'ใครบางคน',
-      type: winkType
-    });
+    io.emit('receive-wink', { user: socket.currentNick || socket.djName || 'ใครบางคน', type: winkType });
   });
 
   socket.on('dj-create-poll', (pollData) => {
@@ -323,8 +312,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('cast-vote', (option) => {
-    if (!activePoll) return;
-    if (activePoll.voters.includes(socket.id)) return;
+    if (!activePoll || activePoll.voters.includes(socket.id)) return;
     activePoll.voters.push(socket.id);
     if (option === 'A') activePoll.votesA++;
     if (option === 'B') activePoll.votesB++;
@@ -357,8 +345,7 @@ io.on('connection', (socket) => {
   socket.on('admin-kick-user', (targetSocketId) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     const target = io.sockets.sockets.get(targetSocketId);
-    if (target) {
-      if (target.userRole === 'admin') return;
+    if (target && target.userRole !== 'admin') {
       target.emit('kicked-notice', { reason: "คุณถูกเตะออกจากห้องสนทนาโดยผู้ดูแลระบบ" });
       target.disconnect(true);
       io.emit('system-announcement', `👢 สมาชิกคนหนึ่งถูกเชิญออกจากห้องสนทนา`);
@@ -368,8 +355,7 @@ io.on('connection', (socket) => {
   socket.on('admin-ban-user', (targetSocketId) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     const target = io.sockets.sockets.get(targetSocketId);
-    if (target) {
-      if (target.userRole === 'admin') return;
+    if (target && target.userRole !== 'admin') {
       const targetIp = getClientIp(target);
       const targetName = target.currentNick || target.djName || 'Guest';
 
@@ -527,9 +513,7 @@ io.on('connection', (socket) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-      const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(ytUrl)}&format=json`, {
-        signal: controller.signal
-      });
+      const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(ytUrl)}&format=json`, { signal: controller.signal });
       clearTimeout(timeoutId);
 
       if (response.ok) {
@@ -538,12 +522,7 @@ io.on('connection', (socket) => {
       }
     } catch (err) {}
 
-    playlist.push({
-      name: `▶ [YT] ${songTitle}`,
-      type: 'youtube',
-      videoId: item.videoId
-    });
-
+    playlist.push({ name: `▶ [YT] ${songTitle}`, type: 'youtube', videoId: item.videoId });
     io.emit('playlist-update', playlist);
   });
 

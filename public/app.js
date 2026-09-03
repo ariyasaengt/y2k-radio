@@ -44,7 +44,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const backupStationSelect = document.getElementById('backup-station-select');
   const backupAudioPlayer = document.getElementById('backup-audio-player');
 
-  // Music Battle Elements
   const musicBattleBox = document.getElementById('music-battle-box');
   const pollQuestion = document.getElementById('poll-question');
   const pollTitleA = document.getElementById('poll-title-a');
@@ -54,7 +53,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnVoteA = document.getElementById('btn-vote-a');
   const btnVoteB = document.getElementById('btn-vote-b');
 
-  // Modals
   const btnOpenRequestModal = document.getElementById('btn-open-request-modal');
   const requestModal = document.getElementById('request-modal');
   const reqSongInput = document.getElementById('req-song-input');
@@ -79,7 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const battleBtnStart = document.getElementById('battle-btn-start');
   const battleBtnCancel = document.getElementById('battle-btn-cancel');
 
-  // DJ Controls
   const btnOpenLoginModal = document.getElementById('btn-open-login-modal');
   const btnOpenRegisterModal = document.getElementById('btn-open-register-modal');
   const djLoginSection = document.getElementById('dj-login-section');
@@ -166,9 +163,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let previousMusicVol = 80;
   let playlist = [];
 
-  // ========================================================
-  // ⏱️ ตัวนับเวลารายการสด (Live Broadcast Duration Timer)
-  // ========================================================
   let liveBroadcastInterval = null;
   let broadcastStartTime = null;
 
@@ -184,7 +178,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 
-  // Device Token Generator
   let visitorToken = localStorage.getItem('y2k_device_token');
   if (!visitorToken) {
     visitorToken = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
@@ -192,7 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   socket.emit('register-visitor', visitorToken);
 
-  // ตรวจสอบชื่อซ้ำ
   if (usernameInput) {
     const savedName = localStorage.getItem('saved_username');
     const initialName = savedName ? savedName : 'Guest_' + Math.floor(Math.random() * 899 + 100);
@@ -241,7 +233,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Winamp Skin Switcher
   if (winampSkinSelect) {
     winampSkinSelect.addEventListener('change', (e) => {
       document.body.className = e.target.value;
@@ -254,7 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // อัปเดตข้อความวิ่ง Marquee
   socket.on('marquee-update', (text) => {
     if (marqueeText) marqueeText.textContent = text;
   });
@@ -273,10 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!msnToastContainer) return;
     const toast = document.createElement('div');
     toast.className = 'msn-toast';
-    toast.innerHTML = `
-      <div class="msn-toast-title">💬 ${title}</div>
-      <div class="msn-toast-body">${message}</div>
-    `;
+    toast.innerHTML = `<div class="msn-toast-title">💬 ${title}</div><div class="msn-toast-body">${message}</div>`;
     msnToastContainer.appendChild(toast);
     setTimeout(() => {
       toast.style.transition = "opacity 0.5s ease";
@@ -311,9 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ========================================================
-  // 🎥 YouTube Direct Embed & Playback
-  // ========================================================
   let currentYtVideoId = null;
   const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
 
@@ -331,7 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function playYouTubeTrack(videoId, title, seekTo = 0) {
     if (!videoId) return;
 
-    // ถ้ากำลังเล่นเพลงเดิมอยู่แล้ว ไม่ต้องโหลด Iframe ใหม่ให้เสียงกระตุก
+    // ถ้ากำลังเล่นเพลงเดิมอยู่แล้ว ไม่ต้องโหลด iframe ซ้ำ
     const existingIframe = document.getElementById('active-yt-iframe');
     if (currentYtVideoId === videoId && existingIframe) {
       if (trackTitle) trackTitle.textContent = title || "YouTube Track";
@@ -372,7 +356,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (typeof e.data !== 'string') return;
       const data = JSON.parse(e.data);
       if (data.event === 'infoDelivery' && data.info) {
-        // เมื่อเพลงเล่นจบจริง
         if (data.info.playerState === 0) {
           if (myRole === 'admin' || myRole === 'dj') {
             if (isShowLive && playlist.length > 0) {
@@ -387,7 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(err) {}
   });
 
-  // ปิดลูป seekTo รบกวน
   socket.on('radio-sync-pulse', () => {});
 
   socket.on('play-youtube-track', (data) => {
@@ -404,9 +386,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ========================================================
-  // ⏸️ ฟังก์ชันพักเพลงชั่วคราวเพื่อคุยไมค์
-  // ========================================================
   if (btnPauseMusic) {
     btnPauseMusic.onclick = () => {
       if (!isShowLive) return alert("กรุณาเริ่มจัดรายการสดก่อนใช้งาน!");
@@ -444,9 +423,6 @@ document.addEventListener('DOMContentLoaded', () => {
     showMsnToast("Studio", "▶ เล่นเพลงต่อแล้ว");
   });
 
-  // ========================================================
-  // 🎵 จัดการคิวเพลงในหน้าต่างขวามือ (Playlist Queue Window)
-  // ========================================================
   function renderPlaylist() {
     if (!playlistContainer) return;
     if (rightQueueCount) rightQueueCount.textContent = playlist ? playlist.length : 0;
@@ -579,17 +555,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // ========================================================
-  // 💬 แท็บแชท MSN & Whisper Notifications
-  // ========================================================
   function switchChatTab(tabName) {
     activeTab = tabName;
     document.querySelectorAll('#chat-tabs-header .tab').forEach(t => {
       const isTarget = t.getAttribute('data-tab') === tabName;
       t.classList.toggle('active', isTarget);
-      if (isTarget) {
-        t.classList.remove('tab-unread');
-      }
+      if (isTarget) t.classList.remove('tab-unread');
     });
     document.querySelectorAll('.tab-pane').forEach(p => {
       if (tabName === 'general') {
@@ -785,9 +756,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnSend) btnSend.onclick = sendMessage;
   if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } });
 
-  // ========================================================
-  // 🎛️ Audio Engine & LED Segmented Block Visualizer (Smooth Sync)
-  // ========================================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
   let nextMicPlayTime = 0;
 
@@ -1022,7 +990,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Winks
   if (btnWinksMenu && winksPicker) {
     btnWinksMenu.onclick = (e) => {
       e.stopPropagation();
@@ -1105,7 +1072,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e) {}
   }
 
-  // Music Battle
   if (btnOpenBattleModal && battleModal) {
     btnOpenBattleModal.onclick = () => battleModal.classList.remove('hide');
     battleBtnCancel.onclick = () => battleModal.classList.add('hide');
@@ -1136,7 +1102,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnVoteA) btnVoteA.onclick = () => socket.emit('cast-vote', 'A');
   if (btnVoteB) btnVoteB.onclick = () => socket.emit('cast-vote', 'B');
 
-  // Secret Dedication
   if (btnOpenSecretModal && secretModal) {
     btnOpenSecretModal.onclick = () => secretModal.classList.remove('hide');
     secBtnCancel.onclick = () => secretModal.classList.add('hide');
@@ -1151,7 +1116,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // Broadcast Recorder
   let showMediaRecorder = null;
   let recordedAudioChunks = [];
   let isRecordingShow = false;
@@ -1192,7 +1156,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // ไมค์ดีเจ
   let micStream = null;
   let micAudioCtx = null;
   let micProcessorNode = null;
@@ -1242,7 +1205,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // Modals & Auth Events
   if (btnOpenLoginModal && loginModal) {
     btnOpenLoginModal.onclick = () => {
       loginUserInput.value = ''; loginPassInput.value = ''; 
@@ -1571,7 +1533,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const p = particles[i];
       p.x += p.vx; p.y += p.vy; p.alpha -= 0.025;
       gCtx.fillStyle = p.color; gCtx.globalAlpha = Math.max(0, p.alpha);
-      gCtx.beginPath(); gCtx.arc(p.x, p.size / 2, 0, Math.PI * 2); gCtx.fill();
+      gCtx.beginPath(); gCtx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2); gCtx.fill();
       if (p.alpha <= 0) { particles.splice(i, 1); i--; }
     }
     requestAnimationFrame(animateGlitter);
@@ -1720,9 +1682,6 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.on('topic-update', (t) => { if (displayTopic) displayTopic.textContent = t; });
   if (btnSaveTopic) btnSaveTopic.onclick = () => { const t = djTopicInput.value.trim(); if (t) { socket.emit('dj-set-topic', t); djTopicInput.value = ''; } };
 
-  // ========================================================
-  // 🔴 จัดการสถานะรายการสด & ตัวจับเวลารายการ (On-Air Duration)
-  // ========================================================
   socket.on('dj-status-update', (data) => {
     const isLive = typeof data === 'object' ? data.isLive : data;
     const startedAt = typeof data === 'object' ? data.startedAt : null;
