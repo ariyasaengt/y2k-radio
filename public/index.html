@@ -3,15 +3,72 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Y2K Messenger Radio</title>
-  <script src="https://www.youtube.com/iframe_api"></script>
+  <title>Windows Live Messenger - Y2K Radio</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <canvas id="glitter-canvas"></canvas>
   <div id="heart-container" class="heart-container"></div>
 
-  <div id="main-app-window" class="desktop-wrap">
+  <!-- ========================================== -->
+  <!-- 🚪 หน้าต่าง MSN Messenger Sign-In (Login Screen) -->
+  <!-- ========================================== -->
+  <div id="msn-auth-gateway" class="auth-wrapper">
+    <div class="window-pane msn-signin-window">
+      <div class="window-header">
+        <span class="icon-msn">👥</span>
+        <span class="title">Windows Live Messenger - Sign In</span>
+      </div>
+      <div class="signin-body">
+        <div class="msn-logo-box">
+          <div class="msn-butterflies">🦋</div>
+          <h2 class="msn-title">Windows Live Messenger</h2>
+          <p class="msn-subtitle">Y2K Retro Radio Community</p>
+        </div>
+
+        <div class="signin-form-box">
+          <div class="form-group">
+            <label>ชื่อผู้ใช้งาน / อีเมล MSN:</label>
+            <input type="text" id="auth-username" class="y2k-input" placeholder="เช่น user@hotmail.com หรือ ชื่อเล่น">
+          </div>
+
+          <div class="form-group">
+            <label>รหัสผ่าน (เว้นว่างได้ถ้าเข้าฟังทั่วไป / ใส่เมื่อเป็น DJ หรือ Admin):</label>
+            <input type="password" id="auth-password" class="y2k-input" placeholder="รหัสผ่านสำหรับ DJ / แอดมิน">
+          </div>
+
+          <div class="form-group">
+            <label>สถานะเมื่อเข้าสู่ระบบ:</label>
+            <select id="auth-initial-status" class="y2k-select">
+              <option value="🟢 ออนไลน์">🟢 Online (ออนไลน์)</option>
+              <option value="🔴 ไม่ว่าง">🔴 Busy (ไม่ว่าง)</option>
+              <option value="🟡 ไม่อยู่">🟡 Away (ไม่อยู่หน้าจอ)</option>
+              <option value="☕ ไปพัก">☕ Be Right Back (เดี๋ยวมา)</option>
+            </select>
+          </div>
+
+          <div class="checkbox-row">
+            <label><input type="checkbox" id="auth-remember" checked> จำข้อมูลการเข้าสู่ระบบ</label>
+          </div>
+
+          <div id="auth-error-banner" class="error-msg hide"></div>
+
+          <div class="signin-btn-row">
+            <button id="btn-msn-signin" class="y2k-btn primary-btn signin-btn">Sign In (เข้าสู่ระบบ)</button>
+          </div>
+
+          <div class="signin-footer-links">
+            <a href="javascript:void(0)" id="link-open-dj-reg">📝 ลงทะเบียนสมัครเป็นดีเจ</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 📻 หน้าต่างหลักของสถานี (แสดงผลเมื่อล็อกอินแล้ว) -->
+  <!-- ========================================== -->
+  <div id="main-app-window" class="desktop-wrap hide">
     <!-- แถบซ้าย: สถานีวิทยุและดีเจ -->
     <aside class="window-pane side-bar">
       <div class="window-header">
@@ -38,10 +95,8 @@
             <div id="track-title" class="track-title">รอเริ่มรายการ</div>
             <div id="track-artist" class="track-sub">Offline</div>
 
-            <!-- หน้าจอ Mini Player สำหรับ YouTube -->
-            <div id="yt-screen-wrapper" class="yt-screen-container hide">
-              <div id="yt-player-element"></div>
-            </div>
+            <!-- หน้าจอ YouTube Screen -->
+            <div id="yt-screen-wrapper" class="yt-screen-container hide"></div>
 
             <div class="track-timer-row">
               <span id="track-time-current">00:00</span>
@@ -99,11 +154,6 @@
         <!-- แผงดีเจและแอดมิน -->
         <div class="section-box dj-panel">
           <div class="section-title">Broadcast Booth</div>
-          
-          <div id="dj-login-section" class="btn-group">
-            <button id="btn-open-login-modal" class="y2k-btn primary-btn flex-1">🔐 เข้าสู่ระบบ</button>
-            <button id="btn-open-register-modal" class="y2k-btn request-btn">📝 สมัครดีเจ</button>
-          </div>
 
           <div id="dj-portal-section" class="hide" style="text-align: center; padding: 10px; background: #e0f2fe; border: 1px solid #7dd3fc; border-radius: 4px; margin-bottom: 6px;">
             <div style="font-weight: bold; color: #0369a1;">👋 ยินดีต้อนรับ: <span id="dj-portal-name">DJ</span></div>
@@ -112,13 +162,11 @@
             <div id="dj-portal-waiting-text" class="hide" style="font-weight: bold; color: #d97706; margin-top: 6px; font-size: 11px;">
               ⏳ ส่งคำขอแล้ว! กำลังรอแอดมินกดอนุมัติ...
             </div>
-            <button id="btn-dj-portal-logout" class="y2k-btn logout-btn" style="margin-top: 6px;">🚪 ออกจากระบบ</button>
           </div>
 
           <div id="dj-controls-section" class="dj-controls hide">
             <div class="dj-header-bar">
               <span id="role-badge" class="dj-badge-status">🎧 สิทธิ์: กำลังโหลด</span>
-              <button type="button" id="btn-dj-logout" class="y2k-btn logout-btn">🚪 ออกจากระบบ</button>
             </div>
 
             <div id="admin-approval-panel" class="admin-panel hide">
@@ -231,9 +279,12 @@
       <div class="window-header">
         <span class="icon-bubble">💬</span>
         <span class="title">Live Chat & Shoutbox (MSN Edition)</span>
-        <label style="margin-left: auto; font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
-          <input type="checkbox" id="chk-msn-sound" checked> 🔊 เสียง MSN
-        </label>
+        <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
+            <input type="checkbox" id="chk-msn-sound" checked> 🔊 เสียง MSN
+          </label>
+          <button id="btn-app-logout" class="y2k-btn logout-btn" style="padding: 2px 6px !important;">Sign Out</button>
+        </div>
       </div>
 
       <div class="marquee-ticker">
@@ -280,11 +331,11 @@
           <!-- MSN Status Selector -->
           <select id="user-online-status" class="y2k-select" style="width: 120px;">
             <option value="🟢 ออนไลน์">🟢 ออนไลน์</option>
-            <option value="🔴 ห้ามรบกวน">🔴 ไม่ว่าง</option>
+            <option value="🔴 ไม่ว่าง">🔴 ไม่ว่าง</option>
             <option value="🟡 ไม่อยู่">🟡 ไม่อยู่</option>
-            <option value="☕ ไปพักดื่มกาแฟ">☕ ไปพัก</option>
+            <option value="☕ ไปพัก">☕ ไปพัก</option>
           </select>
-          <input type="text" id="username" class="y2k-input" placeholder="ชื่อเล่น" style="width: 130px;">
+          <input type="text" id="username" class="y2k-input" placeholder="ชื่อเล่น" style="width: 130px;" readonly>
           <input type="text" id="userstatus" class="y2k-input flex-1" placeholder="สเตตัส MSN (จะขึ้น Now Listening อัตโนมัติเมื่อฟังเพลง)">
         </div>
 
@@ -298,6 +349,7 @@
     </main>
   </div>
 
+  <!-- Modal ขอเพลง -->
   <div id="request-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -321,30 +373,7 @@
     </div>
   </div>
 
-  <div id="login-modal" class="y2k-modal-overlay hide">
-    <div class="window-pane modal-box">
-      <div class="window-header">
-        <span class="icon-flower">🔐</span>
-        <span class="title">เข้าสู่ระบบ (แอดมิน / ดีเจ)</span>
-      </div>
-      <div class="modal-body">
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">ชื่อจัดรายการ (ดีเจ):</label>
-          <input type="text" id="login-user-input" class="y2k-input" placeholder="หากเป็นแอดมินเว้นว่างได้" style="width: 100%; margin-top: 3px;">
-        </div>
-        <div>
-          <label style="font-weight: bold; font-size: 11px;">รหัสผ่าน (Admin Key หรือ รหัสดีเจ):</label>
-          <input type="password" id="login-pass-input" class="y2k-input" placeholder="ใส่รหัสผ่าน..." style="width: 100%; margin-top: 3px;">
-        </div>
-        <div id="login-error" class="error-msg hide"></div>
-        <div class="modal-actions">
-          <button id="login-btn-confirm" class="y2k-btn">เข้าสู่ระบบ</button>
-          <button id="login-btn-cancel" class="y2k-btn">ยกเลิก</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
+  <!-- Modal สมัครดีเจ -->
   <div id="register-modal" class="y2k-modal-overlay hide">
     <div class="window-pane modal-box">
       <div class="window-header">
@@ -370,6 +399,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=25"></script>
+  <script src="app.js?v=26"></script>
 </body>
 </html>
