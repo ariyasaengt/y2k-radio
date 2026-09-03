@@ -13,6 +13,7 @@
   <div id="winks-overlay-container" class="winks-overlay hide"></div>
 
   <div id="main-app-window" class="desktop-wrap">
+    <!-- แถบซ้าย: สถานีวิทยุและแผงควบคุมดีเจ -->
     <aside class="window-pane side-bar">
       <div class="window-header">
         <span class="icon-flower">🌸</span>
@@ -101,15 +102,7 @@
           <audio id="backup-audio-player" controls preload="none" style="width: 100%; height: 28px; margin-top: 6px;"></audio>
         </div>
 
-        <!-- Playlist -->
-        <div class="section-box playlist-section">
-          <div class="section-title">Playlist Queue</div>
-          <ul id="playlist-container" class="playlist-list">
-            <li>ไม่มีรายการเพลง</li>
-          </ul>
-        </div>
-
-        <!-- DJ Booth -->
+        <!-- Broadcast Booth -->
         <div class="section-box dj-panel">
           <div class="section-title">Broadcast Booth</div>
           
@@ -135,7 +128,7 @@
             </div>
 
             <div class="btn-group" style="margin-bottom: 6px;">
-              <button id="btn-record-show" class="y2k-btn" style="flex: 1;">⏺️ บันทึกรายการสด</button>
+              <button id="btn-record-show" class="y2k-btn" style="flex: 1;">⏺️ บันทึกรายการ</button>
               <button id="btn-open-battle-modal" class="y2k-btn" style="flex: 1;">⚔️ เปิดโหวตเพลง</button>
             </div>
 
@@ -168,15 +161,15 @@
             </div>
 
             <div class="yt-input-box">
-              <span class="sub-label">▶ เพิ่มเพลงจากลิงก์ YouTube เข้าคิว:</span>
+              <span class="sub-label">▶ เพิ่มเพลงจาก YouTube เข้าคิว:</span>
               <div class="input-row">
                 <input type="text" id="dj-yt-url" class="y2k-input flex-1" placeholder="วางลิงก์ เช่น https://youtu.be/...">
-                <button type="button" id="btn-play-yt" class="y2k-btn yt-play-btn">+ เพิ่มเข้าคิว</button>
+                <button type="button" id="btn-play-yt" class="y2k-btn yt-play-btn">+ เพิ่ม</button>
               </div>
             </div>
 
             <div class="requests-queue-box">
-              <div class="sfx-title">📥 เพลงที่คนขอเข้ามา <span>(<span id="req-count">0</span>)</span></div>
+              <div class="sfx-title">📥 คำขอเพลง <span>(<span id="req-count">0</span>)</span></div>
               <ul id="requests-list" class="requests-list">
                 <li>ยังไม่มีคำขอเพลง</li>
               </ul>
@@ -257,11 +250,11 @@
       </div>
     </aside>
 
-    <!-- Chat & Shoutbox -->
+    <!-- แถบขวา: ห้องแชท & คิวเพลงจัดการสตูดิโอ -->
     <main class="window-pane chat-window">
       <div class="window-header">
         <span class="icon-bubble">💬</span>
-        <span class="title">Live Chat & Shoutbox (MSN Messenger Edition)</span>
+        <span class="title">Live Chat & Studio Playlist (MSN Edition)</span>
         <label style="margin-left: auto; font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
           <input type="checkbox" id="chk-msn-sound" checked> 🔊 เสียง MSN
         </label>
@@ -269,7 +262,7 @@
 
       <div class="marquee-ticker">
         <marquee scrollamount="4" behavior="scroll" direction="left">
-          ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • สเปกตรัมเต้นสดสไตล์ Winamp • พิมพ์โค้ดสี MSN Plus เช่น ·$4แดง ·$1 ·$3เขียว ได้เลย! ✨
+          ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • สเปกตรัมเต้นสดสไตล์ Winamp • จัดคิวเพลง สลับ และลบได้สะดวกในแท็บ Playlist ✨
         </marquee>
       </div>
 
@@ -283,12 +276,28 @@
         <span id="pinned-text" class="pinned-text"></span>
       </div>
 
+      <!-- หัวแท็บ: มีแท็บ Playlist แยกชัดเจน -->
       <div id="chat-tabs-header" class="chat-tab-bar">
-        <div class="tab active" data-tab="general">General Room</div>
+        <div class="tab active" data-tab="general">💬 General Room</div>
+        <div class="tab tab-playlist-highlight" data-tab="playlist">🎵 Playlist Queue (<span id="tab-queue-count">0</span>)</div>
       </div>
 
       <div id="chat-logs-container" class="chat-logs-wrapper">
+        <!-- หน้าแชทปกติ -->
         <div id="chat-logs" class="chat-logs tab-pane active"></div>
+
+        <!-- หน้าต่าง Playlist Queue ด้านขวา (สำหรับจัดการ สลับ และลบคิว) -->
+        <div id="pane-playlist" class="chat-logs tab-pane">
+          <div class="studio-playlist-header">
+            <div>
+              <strong style="color: #0c4383; font-size: 13px;">📋 รายการเพลงในคิวสถานี (Playlist Manager)</strong>
+              <div style="font-size: 11px; color: #64748b;">ดีเจและแอดมินสามารถคลิกเลื่อนลำดับเพลง 🔼 🔽 หรือ 🗑️ ลบเพลงที่ไม่ต้องการได้ทันที</div>
+            </div>
+          </div>
+          <ul id="playlist-container" class="studio-playlist-list">
+            <li>ไม่มีรายการเพลง</li>
+          </ul>
+        </div>
       </div>
 
       <div class="chat-input-area">
@@ -306,7 +315,6 @@
             </div>
           </div>
 
-          <!-- ปุ่ม Winks ขนาดพอดีเป็นไอคอนเดี่ยว -->
           <div class="pop-wrapper">
             <button type="button" id="btn-winks-menu" class="tool-btn" title="ส่ง MSN Winks แฟลชเต็มจอ">✨</button>
             <div id="winks-picker" class="emoji-picker hide" style="width: 140px; grid-template-columns: 1fr;">
@@ -472,6 +480,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=40"></script>
+  <script src="app.js?v=45"></script>
 </body>
 </html>

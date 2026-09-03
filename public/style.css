@@ -1021,3 +1021,79 @@ body.theme-cyber-neon .lcd-text {
   #username, #userstatus { width: 100% !important; }
   #btn-send { width: 70px; }
 }
+
+/* ======================================================== */
+/* 🎵 Studio Playlist Layout (ด้านขวา)                       */
+/* ======================================================== */
+.tab-playlist-highlight {
+  background: linear-gradient(180deg, #fef08a 0%, #fde047 100%) !important;
+  color: #713f12 !important;
+  border-color: #ca8a04 !important;
+}
+
+.studio-playlist-header {
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+.studio-playlist-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px;
+}
+
+.studio-playlist-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  padding: 6px 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: all 0.15s ease;
+}
+
+.studio-playlist-item:hover {
+  background: #f0f9ff;
+  border-color: #38bdf8;
+}
+
+.track-meta-title {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+
+.queue-action-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.q-btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: bold;
+  cursor: pointer;
+  background: #ffffff;
+  transition: background 0.1s ease;
+}
+
+.q-btn:hover { background: #f1f5f9; }
+.q-btn-play { background: #10b981; color: #fff; border-color: #059669; }
+.q-btn-play:hover { background: #059669; }
+.q-btn-delete { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+.q-btn-delete:hover { background: #fca5a5; }

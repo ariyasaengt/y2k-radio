@@ -16,7 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const winampSkinSelect = document.getElementById('winamp-skin-select');
 
   const chatTabsHeader = document.getElementById('chat-tabs-header');
+  const tabQueueCount = document.getElementById('tab-queue-count');
   const chatLogs = document.getElementById('chat-logs');
+  const panePlaylist = document.getElementById('pane-playlist');
   const chatInput = document.getElementById('chat-message');
   const usernameInput = document.getElementById('username');
   const userstatusInput = document.getElementById('userstatus');
@@ -159,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
   let playlist = [];
 
   // ========================================================
-  // 📱 Device Token Generator (นับผู้ชมจริงแยกคอมกับมือถือ)
+  // 📱 Device Token Generator
   // ========================================================
   let visitorToken = localStorage.getItem('y2k_device_token');
   if (!visitorToken) {
@@ -169,7 +171,7 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.emit('register-visitor', visitorToken);
 
   // ========================================================
-  // 🚫 ระบบตรวจสอบและเปลี่ยนชื่อเล่น (ป้องกันชื่อซ้ำ)
+  // 🚫 ตรวจสอบและจองชื่อผู้ใช้
   // ========================================================
   if (usernameInput) {
     const savedName = localStorage.getItem('saved_username');
@@ -391,185 +393,146 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ========================================================
-  // ✨ MSN Winks System
+  // 🎵 จัดการคิวเพลงด้านขวา (สลับลำดับ / ลบ / สั่งเล่น)
   // ========================================================
-  if (btnWinksMenu && winksPicker) {
-    btnWinksMenu.onclick = (e) => {
-      e.stopPropagation();
-      winksPicker.classList.toggle('hide');
-    };
-    winksPicker.querySelectorAll('span').forEach(item => {
-      item.onclick = () => {
-        const winkType = item.getAttribute('data-wink');
-        socket.emit('send-wink', winkType);
-        winksPicker.classList.add('hide');
-      };
-    });
-    document.addEventListener('click', () => winksPicker.classList.add('hide'));
-  }
-
-  socket.on('receive-wink', (data) => {
-    if (!winksOverlayContainer) return;
-    winksOverlayContainer.classList.remove('hide');
-    winksOverlayContainer.innerHTML = '';
-
-    const winkEl = document.createElement('div');
-    winkEl.className = 'wink-item';
-
-    if (data.type === 'kiss') {
-      winkEl.textContent = '💋';
-      playKissSound();
-    } else if (data.type === 'bomb') {
-      winkEl.textContent = '💣';
-      playBombSound();
-    } else if (data.type === 'water') {
-      winkEl.textContent = '🌊';
-      playWaterSound();
-    }
-
-    winksOverlayContainer.appendChild(winkEl);
-    showMsnToast("MSN Wink", `${data.user} ส่ง Wink แฟลชเต็มจอ!`);
-
-    setTimeout(() => {
-      winksOverlayContainer.classList.add('hide');
-      winksOverlayContainer.innerHTML = '';
-    }, 2500);
-  });
-
-  function playKissSound() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator(), gain = ctx.createGain();
-      osc.type = 'triangle'; osc.frequency.setValueAtTime(450, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.15);
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + 0.22);
-    } catch(e) {}
-  }
-
-  function playBombSound() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator(), gain = ctx.createGain();
-      osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, ctx.currentTime);
-      osc.frequency.linearRampToValueAtTime(30, ctx.currentTime + 0.5);
-      gain.gain.setValueAtTime(0.5, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + 0.55);
-    } catch(e) {}
-  }
-
-  function playWaterSound() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = ctx.createOscillator(), gain = ctx.createGain();
-      osc.type = 'sine'; osc.frequency.setValueAtTime(300, ctx.currentTime);
-      osc.frequency.linearRampToValueAtTime(150, ctx.currentTime + 0.4);
-      gain.gain.setValueAtTime(0.4, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.start(); osc.stop(ctx.currentTime + 0.45);
-    } catch(e) {}
-  }
-
-  // ========================================================
-  // ⚔️ Music Battle
-  // ========================================================
-  if (btnOpenBattleModal && battleModal) {
-    btnOpenBattleModal.onclick = () => battleModal.classList.remove('hide');
-    battleBtnCancel.onclick = () => battleModal.classList.add('hide');
-    battleBtnStart.onclick = () => {
-      const title = battleTitleInput.value.trim();
-      const songA = battleSongA.value.trim();
-      const songB = battleSongB.value.trim();
-      if (!songA || !songB) return alert("กรุณาใส่ชื่อเพลงทั้งสองเพลง!");
-      socket.emit('dj-create-poll', { title, songA, songB });
-      battleModal.classList.add('hide');
-    };
-  }
-
-  socket.on('poll-update', (poll) => {
-    if (!musicBattleBox) return;
-    if (!poll) {
-      musicBattleBox.classList.add('hide');
+  function renderPlaylist() {
+    if (!playlistContainer) return;
+    if (tabQueueCount) tabQueueCount.textContent = playlist ? playlist.length : 0;
+    
+    playlistContainer.innerHTML = '';
+    if (!playlist || playlist.length === 0) {
+      playlistContainer.innerHTML = '<li style="color:#64748b; padding: 12px; text-align: center;">ไม่มีรายการเพลงในคิว</li>';
       return;
     }
-    musicBattleBox.classList.remove('hide');
-    pollQuestion.textContent = poll.title;
-    pollTitleA.textContent = poll.songA;
-    pollTitleB.textContent = poll.songB;
-    pollVotesA.textContent = poll.votesA;
-    pollVotesB.textContent = poll.votesB;
+
+    playlist.forEach((t, i) => {
+      const li = document.createElement('li');
+      li.className = 'studio-playlist-item';
+
+      const isDJ = (myRole === 'admin' || myRole === 'dj');
+      const actionButtons = isDJ ? `
+        <div class="queue-action-group">
+          <button class="q-btn q-btn-move-up" data-idx="${i}" title="เลื่อนขึ้นด้านบน" ${i === 0 ? 'disabled style="opacity:0.4;"' : ''}>🔼</button>
+          <button class="q-btn q-btn-move-down" data-idx="${i}" title="เลื่อนลงด้านล่าง" ${i === playlist.length - 1 ? 'disabled style="opacity:0.4;"' : ''}>🔽</button>
+          <button class="q-btn q-btn-play" data-idx="${i}" title="สั่งเล่นเพลงนี้ทันที">▶ เล่น</button>
+          <button class="q-btn q-btn-delete" data-idx="${i}" title="ลบออกจากคิว">🗑️ ลบ</button>
+        </div>
+      ` : '';
+
+      li.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+          <span style="font-weight: bold; color: #64748b; font-size: 11px;">#${i + 1}</span>
+          <span class="track-meta-title" title="${t.name}">${t.name}</span>
+        </div>
+        ${actionButtons}
+      `;
+      playlistContainer.appendChild(li);
+    });
+
+    if (myRole === 'admin' || myRole === 'dj') {
+      // ปุ่มเลื่อนขึ้น
+      playlistContainer.querySelectorAll('.q-btn-move-up').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const idx = parseInt(btn.getAttribute('data-idx'));
+          if (idx > 0) {
+            const temp = playlist[idx];
+            playlist[idx] = playlist[idx - 1];
+            playlist[idx - 1] = temp;
+            socket.emit('dj-update-playlist', playlist);
+            renderPlaylist();
+          }
+        };
+      });
+
+      // ปุ่มเลื่อนลง
+      playlistContainer.querySelectorAll('.q-btn-move-down').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const idx = parseInt(btn.getAttribute('data-idx'));
+          if (idx < playlist.length - 1) {
+            const temp = playlist[idx];
+            playlist[idx] = playlist[idx + 1];
+            playlist[idx + 1] = temp;
+            socket.emit('dj-update-playlist', playlist);
+            renderPlaylist();
+          }
+        };
+      });
+
+      // ปุ่มลบเพลง
+      playlistContainer.querySelectorAll('.q-btn-delete').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const idx = parseInt(btn.getAttribute('data-idx'));
+          if (confirm(`ต้องการลบเพลง "${playlist[idx].name}" ออกจากคิวใช่หรือไม่?`)) {
+            playlist.splice(idx, 1);
+            socket.emit('dj-update-playlist', playlist);
+            renderPlaylist();
+          }
+        };
+      });
+
+      // ปุ่มสั่งเล่น
+      playlistContainer.querySelectorAll('.q-btn-play').forEach(btn => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const idx = parseInt(btn.getAttribute('data-idx'));
+          playItemAtIndex(idx);
+        };
+      });
+    }
+  }
+
+  function playItemAtIndex(idx) {
+    if (!playlist[idx]) return;
+
+    if (!isShowLive) {
+      alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนเปิดเพลงครับ!");
+      return;
+    }
+
+    const item = playlist.splice(idx, 1)[0];
+    socket.emit('dj-update-playlist', playlist);
+
+    if (item.type === 'youtube') {
+      if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
+      socket.emit('dj-play-youtube', { videoId: item.videoId, title: item.name });
+    } else {
+      socket.emit('dj-stop-youtube');
+      socket.emit('dj-update-track', { track: { title: item.name, artist: myRole === 'admin' ? "Super Admin (MP3)" : `DJ ${myDJName} (MP3)` } });
+      if (item.arrayBuffer) {
+        item.arrayBuffer().then(ab => {
+          socket.emit('dj-audio-stream', { type: 'music', buffer: ab });
+        });
+      }
+    }
+  }
+
+  socket.on('playlist-update', (list) => {
+    playlist = list || [];
+    renderPlaylist();
   });
 
-  if (btnVoteA) btnVoteA.onclick = () => socket.emit('cast-vote', 'A');
-  if (btnVoteB) btnVoteB.onclick = () => socket.emit('cast-vote', 'B');
+  if (djFileInput) {
+    djFileInput.onchange = (e) => {
+      const files = Array.from(e.target.files).map(f => { f.type = 'mp3'; return f; });
+      playlist = playlist.concat(files);
+      socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
+      showMsnToast("Playlist", `เพิ่ม ${files.length} เพลง MP3 เข้าคิวแล้ว!`);
+    };
+  }
 
-  // ========================================================
-  // 💌 Secret Dedication
-  // ========================================================
-  if (btnOpenSecretModal && secretModal) {
-    btnOpenSecretModal.onclick = () => secretModal.classList.remove('hide');
-    secBtnCancel.onclick = () => secretModal.classList.add('hide');
-    secBtnSubmit.onclick = () => {
-      const song = secSongInput.value.trim();
-      const note = secNoteInput.value.trim();
-      if (!song) return alert("กรุณาใส่ชื่อเพลง!");
-      socket.emit('submit-secret-dedication', { song, note });
-      secretModal.classList.add('hide');
-      showMsnToast("Secret Dedication", "ส่งข้อความลับถึงสถานีเรียบร้อยแล้ว!");
-      secSongInput.value = ''; secNoteInput.value = '';
+  if (btnPlayMusic) {
+    btnPlayMusic.onclick = () => {
+      if (!isShowLive) return alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนครับ!");
+      if (playlist.length === 0) return alert('ไม่มีเพลงในคิว');
+      playItemAtIndex(0);
     };
   }
 
   // ========================================================
-  // 🎙️ Broadcast Recorder
-  // ========================================================
-  let showMediaRecorder = null;
-  let recordedAudioChunks = [];
-  let isRecordingShow = false;
-
-  if (btnRecordShow) {
-    btnRecordShow.onclick = async () => {
-      if (!isRecordingShow) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          recordedAudioChunks = [];
-          showMediaRecorder = new MediaRecorder(stream);
-          showMediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) recordedAudioChunks.push(e.data);
-          };
-          showMediaRecorder.onstop = () => {
-            const blob = new Blob(recordedAudioChunks, { type: 'audio/webm' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Y2K_Radio_Live_${Date.now()}.webm`;
-            a.click();
-            showMsnToast("Recorder", "ดาวน์โหลดเทปบันทึกรายการแล้ว!");
-          };
-          showMediaRecorder.start();
-          isRecordingShow = true;
-          btnRecordShow.textContent = "⏹️ หยุดอัด & โหลดเทป";
-          btnRecordShow.classList.add('danger-btn');
-          showMsnToast("Recorder", "กำลังบันทึกเสียงจัดรายการสด...");
-        } catch(err) {
-          alert("ไม่สามารถอัดเสียงได้: " + err.message);
-        }
-      } else {
-        if (showMediaRecorder) showMediaRecorder.stop();
-        isRecordingShow = false;
-        btnRecordShow.textContent = "⏺️ บันทึกรายการสด";
-        btnRecordShow.classList.remove('danger-btn');
-      }
-    };
-  }
-
-  // ========================================================
-  // 💬 Tabs & Whisper
+  // 💬 แท็บแชท & แท็บคิวเพลง
   // ========================================================
   function switchChatTab(tabName) {
     activeTab = tabName;
@@ -577,7 +540,14 @@ document.addEventListener('DOMContentLoaded', () => {
       t.classList.toggle('active', t.getAttribute('data-tab') === tabName);
     });
     document.querySelectorAll('.tab-pane').forEach(p => {
-      p.classList.toggle('active', p.id === (tabName === 'general' ? 'chat-logs' : `whisper-logs-${tabName}`));
+      if (tabName === 'general') {
+        p.classList.toggle('active', p.id === 'chat-logs');
+      } else if (tabName === 'playlist') {
+        p.classList.toggle('active', p.id === 'pane-playlist');
+        renderPlaylist();
+      } else {
+        p.classList.toggle('active', p.id === `whisper-logs-${tabName}`);
+      }
     });
   }
 
@@ -724,7 +694,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!text) return;
     clearTimeout(typingTimeout); socket.emit('typing-stop');
 
-    if (activeTab !== 'general') {
+    if (activeTab !== 'general' && activeTab !== 'playlist') {
       const activeTabEl = document.querySelector(`.tab[data-tab="${activeTab}"]`);
       const partnerName = activeTabEl ? activeTabEl.textContent.replace('💬 ', '') : 'User';
       socket.emit('private-whisper', {
@@ -744,7 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } });
 
   // ========================================================
-  // 🔊 Audio Engine
+  // 🔊 Audio Engine & SFX
   // ========================================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
   let nextMicPlayTime = 0;
@@ -809,7 +779,6 @@ document.addEventListener('DOMContentLoaded', () => {
   sfxButtons.forEach(btn => btn.onclick = () => socket.emit('dj-play-sfx', btn.getAttribute('data-sound')));
   socket.on('play-sfx', (type) => {
     if (!isListeningToMain) return;
-
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = ctx.createOscillator(), gain = ctx.createGain();
@@ -942,78 +911,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   });
-
-  function renderPlaylist() {
-    if (!playlistContainer) return;
-    playlistContainer.innerHTML = '';
-    if (!playlist || playlist.length === 0) {
-      playlistContainer.innerHTML = '<li>ไม่มีรายการเพลง</li>';
-      return;
-    }
-    playlist.forEach((t, i) => {
-      const li = document.createElement('li');
-      li.innerHTML = `
-        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px;">${i + 1}. ${t.name}</span>
-        ${(myRole === 'admin' || myRole === 'dj') ? `<button class="play-now-pill" data-idx="${i}">▶ เล่น</button>` : ''}
-      `;
-      playlistContainer.appendChild(li);
-    });
-
-    playlistContainer.querySelectorAll('.play-now-pill').forEach(btn => {
-      btn.onclick = (e) => {
-        e.stopPropagation();
-        const idx = parseInt(btn.getAttribute('data-idx'));
-        playItemAtIndex(idx);
-      };
-    });
-  }
-
-  function playItemAtIndex(idx) {
-    if (!playlist[idx]) return;
-
-    if (!isShowLive) {
-      alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนเปิดเพลงครับ!");
-      return;
-    }
-
-    const item = playlist.splice(idx, 1)[0];
-    socket.emit('dj-update-playlist', playlist);
-
-    if (item.type === 'youtube') {
-      if (currentMusicSource) { currentMusicSource.stop(); currentMusicSource = null; }
-      socket.emit('dj-play-youtube', { videoId: item.videoId, title: item.name });
-    } else {
-      socket.emit('dj-stop-youtube');
-      socket.emit('dj-update-track', { track: { title: item.name, artist: myRole === 'admin' ? "Super Admin (MP3)" : `DJ ${myDJName} (MP3)` } });
-      if (item.arrayBuffer) {
-        item.arrayBuffer().then(ab => {
-          socket.emit('dj-audio-stream', { type: 'music', buffer: ab });
-        });
-      }
-    }
-  }
-
-  socket.on('playlist-update', (list) => {
-    playlist = list || [];
-    renderPlaylist();
-  });
-
-  if (djFileInput) {
-    djFileInput.onchange = (e) => {
-      const files = Array.from(e.target.files).map(f => { f.type = 'mp3'; return f; });
-      playlist = playlist.concat(files);
-      socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
-      showMsnToast("Playlist", `เพิ่ม ${files.length} เพลง MP3 เข้าคิวแล้ว!`);
-    };
-  }
-
-  if (btnPlayMusic) {
-    btnPlayMusic.onclick = () => {
-      if (!isShowLive) return alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนครับ!");
-      if (playlist.length === 0) return alert('ไม่มีเพลงในคิว');
-      playItemAtIndex(0);
-    };
-  }
 
   // ========================================================
   // 🎙️ ไมค์ดีเจ
