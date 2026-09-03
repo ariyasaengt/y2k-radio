@@ -19,7 +19,7 @@ let isDJLive = false;
 let showStartedAt = null;
 let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
 let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨";
-let marqueeNotice = "🎵 Y2K Retro Radio • ฟังเพลงฮิตยุค 2000s ลื่นไหลตลอดวัน • พิมพ์คุยในแชทและขอเพลงโปรดของคุณได้ทันที ✨";
+let marqueeNotice = "✨ ยินดีต้อนรับสู่ Y2K Retro Radio คลื่นเพลงฮิตยุค 2000s • พิมพ์โค้ดสี MSN สั่นสะกิดจอ ส่งเพลงบอกความในใจได้ตลอด 24 ชม. ✨";
 let pinnedMessage = null;
 let playlist = [];
 let songRequests = [];
@@ -29,9 +29,7 @@ let currentVolumes = { music: 0.8, mic: 1.0 };
 
 const activeUsers = new Map();
 
-// ----------------------------------------------------
 // สถิติผู้เข้าชมจริง (Unique Device Token)
-// ----------------------------------------------------
 const STATS_FILE = path.join(__dirname, 'stats.json');
 let siteStats = { totalHits: 0, visitedTokens: [] };
 
@@ -88,6 +86,7 @@ function loadBannedList() {
     else { bannedList = []; saveBannedList(); }
   } catch (err) { bannedList = []; }
 }
+
 function saveBannedList() {
   try { fs.writeFileSync(BANNED_FILE, JSON.stringify(bannedList, null, 2), 'utf-8'); } catch (err) {}
 }
@@ -105,6 +104,7 @@ function loadRegisteredDJs() {
     else { registeredDJs = {}; saveRegisteredDJs(); }
   } catch (err) {}
 }
+
 function saveRegisteredDJs() {
   try { fs.writeFileSync(DJS_FILE, JSON.stringify(registeredDJs, null, 2), 'utf-8'); } catch (err) {}
 }
@@ -119,6 +119,7 @@ function loadChatHistory() {
     }
   } catch (err) { chatHistory = []; }
 }
+
 function saveChatHistory() {
   try { fs.writeFileSync(CHAT_FILE, JSON.stringify({ savedDay: currentDay, history: chatHistory }, null, 2), 'utf-8'); } catch (err) {}
 }
@@ -156,17 +157,6 @@ function startAutoDJ() {
     seekTo: 0
   });
 }
-
-// ซิงค์ชีพจรระบบทุก 5 วินาที
-setInterval(() => {
-  if (currentTrack.youtubeId && currentTrack.startedAt && (isDJLive || !currentBroadcaster)) {
-    io.emit('radio-sync-pulse', {
-      videoId: currentTrack.youtubeId,
-      startedAt: currentTrack.startedAt,
-      serverTime: Date.now()
-    });
-  }
-}, 5000);
 
 function getClientIp(socket) {
   const forwarded = socket.handshake.headers['x-forwarded-for'];
