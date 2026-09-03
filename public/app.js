@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const mainAppWindow = document.getElementById('main-app-window');
   const stationStatus = document.getElementById('station-status');
   const onlineUsersBadge = document.getElementById('online-users-badge');
+  const hitCounterDigits = document.getElementById('hit-counter-digits');
+  const msnToastContainer = document.getElementById('msn-toast-container');
+
   const chatLogs = document.getElementById('chat-logs');
   const chatInput = document.getElementById('chat-message');
   const usernameInput = document.getElementById('username');
@@ -121,6 +124,62 @@ document.addEventListener('DOMContentLoaded', () => {
   let previousMusicVol = 80;
   let playlist = [];
 
+  // ========================================================
+  // 🍞 MSN Messenger Toast Notification
+  // ========================================================
+  function showMsnToast(title, message) {
+    if (!msnToastContainer) return;
+    const toast = document.createElement('div');
+    toast.className = 'msn-toast';
+    toast.innerHTML = `
+      <div class="msn-toast-title">💬 ${title}</div>
+      <div class="msn-toast-body">${message}</div>
+    `;
+    msnToastContainer.appendChild(toast);
+    setTimeout(() => {
+      toast.style.transition = "opacity 0.5s ease";
+      toast.style.opacity = "0";
+      setTimeout(() => toast.remove(), 500);
+    }, 4500);
+  }
+
+  socket.on('hit-counter-update', (hits) => {
+    if (hitCounterDigits) {
+      hitCounterDigits.textContent = String(hits).padStart(6, '0');
+    }
+  });
+
+  // ========================================================
+  // 🎥 YouTube Robust ID Extraction (แก้บั๊กเพิ่มเพลงไม่ได้)
+  // ========================================================
+  function extractYouTubeID(url) {
+    if (!url) return null;
+    const cleanUrl = url.trim();
+
+    // 1. ถ้าผู้ใช้พิมพ์ Video ID มาตรงๆ 11 ตัวอักษร
+    if (/^[a-zA-Z0-9_-]{11}$/.test(cleanUrl)) {
+      return cleanUrl;
+    }
+
+    // 2. ตรวจจับ Regex ครอบคลุม watch?v=, youtu.be/, shorts/, embed/
+    const regExp = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?.*v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const match = cleanUrl.match(regExp);
+    return (match && match[1]) ? match[1] : null;
+  }
+
+  if (btnPlayYt) {
+    btnPlayYt.addEventListener('click', () => {
+      const url = djYtUrl.value.trim();
+      if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
+      const videoId = extractYouTubeID(url);
+      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง! ตรวจสอบลิงก์อีกครั้ง (เช่น https://youtu.be/... หรือ https://www.youtube.com/watch?v=...)");
+
+      socket.emit('dj-add-youtube-to-playlist', { videoId: videoId });
+      djYtUrl.value = '';
+      showMsnToast("Playlist Manager", "เพิ่มเพลงเข้าคิวแล้วเรียบร้อย!");
+    });
+  }
+
   // ==========================================
   // 🎥 ระบบเล่น YouTube แบบ Robust Direct Embed
   // ==========================================
@@ -162,6 +221,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (trackTitle) trackTitle.textContent = title || "YouTube Track";
     if (trackArtist) trackArtist.textContent = "YouTube Broadcast";
+
+    showMsnToast("Now Playing", `${title.replace('▶ [YT] ', '')}`);
 
     if (isListeningToMain && userstatusInput && (!userstatusInput.value || userstatusInput.value.startsWith('🎵 กำลังฟัง:'))) {
       userstatusInput.value = `🎵 กำลังฟัง: ${title.replace('▶ [YT] ', '')}`;
@@ -233,23 +294,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (trackTimerInterval) clearInterval(trackTimerInterval);
   });
 
-  function extractYouTubeID(url) {
-    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-    return match ? match[1] : null;
-  }
-
-  if (btnPlayYt) {
-    btnPlayYt.addEventListener('click', () => {
-      const url = djYtUrl.value.trim();
-      if (!url) return alert("กรุณาวางลิงก์ YouTube ก่อนครับ");
-      const videoId = extractYouTubeID(url);
-      if (!videoId) return alert("รูปแบบลิงก์ YouTube ไม่ถูกต้อง!");
-
-      socket.emit('dj-add-youtube-to-playlist', { videoId: videoId });
-      djYtUrl.value = '';
-    });
-  }
-
   // ==========================================
   // 🚪 ระบบ Modal และคำสั่ง
   // ==========================================
@@ -293,6 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
         text: `🎁 ได้ส่งของขวัญ "${giftType}" ให้กับสถานีและดีเจ!`,
         style: { bold: true, color: '#b45309' }
       });
+      showMsnToast("Virtual Gift", `คุณได้ส่ง ${giftType} เรียบร้อยแล้ว!`);
     };
   });
 
@@ -345,7 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // 🔐 ระบบสมัคร / ล็อกอินสิทธิ์
+  // 🔐 ระบบสมัคร / ล็อกอิน
   // ==========================================
   if (usernameInput) {
     if (localStorage.getItem('saved_username')) usernameInput.value = localStorage.getItem('saved_username');
@@ -566,9 +611,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnDjLogout) btnDjLogout.onclick = performLogout;
   if (btnDjPortalLogout) btnDjPortalLogout.onclick = performLogout;
 
-  // ==========================================
-  // ✨ Glitter & Reactions & Nudge
-  // ==========================================
+  // ========================================================
+  // ✨ Custom Glitter Cursor Trail (หางเมาส์ประกายดาว Y2K)
+  // ========================================================
   const glitterCanvas = document.getElementById('glitter-canvas');
   const gCtx = glitterCanvas ? glitterCanvas.getContext('2d') : null;
   let particles = [];
@@ -581,13 +626,15 @@ document.addEventListener('DOMContentLoaded', () => {
   resizeCanvas();
 
   window.addEventListener('mousemove', (e) => {
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 3; i++) {
       particles.push({
-        x: e.clientX + (Math.random() - 0.5) * 12,
-        y: e.clientY + (Math.random() - 0.5) * 12,
+        x: e.clientX + (Math.random() - 0.5) * 14,
+        y: e.clientY + (Math.random() - 0.5) * 14,
         size: Math.random() * 4 + 2,
-        color: `hsl(${Math.random() * 60 + 180}, 100%, 75%)`,
-        alpha: 1, vy: Math.random() * 1.5 + 0.5, vx: (Math.random() - 0.5) * 1
+        color: `hsl(${Math.random() * 80 + 160}, 100%, 75%)`,
+        alpha: 1, 
+        vy: Math.random() * 1.5 + 0.5, 
+        vx: (Math.random() - 0.5) * 1.2
       });
     }
   });
@@ -634,6 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
       mainAppWindow.classList.add('nudge-shake');
     }
     playNudgeSound();
+    showMsnToast("MSN Nudge", `${data.user} ได้เขย่าสะกิดหน้าจอคุณ!`);
     if (chatLogs) {
       const b = document.createElement('div');
       b.className = 'chat-bubble';
@@ -643,9 +691,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ==========================================
-  // 🔊 Audio & Visualizer & SFX
-  // ==========================================
+  // ========================================================
+  // 🔊 Winamp Style Spectrum & Oscilloscope Visualizer
+  // ========================================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
   let nextMicPlayTime = 0;
 
@@ -680,16 +728,33 @@ document.addEventListener('DOMContentLoaded', () => {
     function render() {
       requestAnimationFrame(render);
       analyserNode.getByteFrequencyData(dataArray);
-      vCtx.fillStyle = '#060e1d';
+      
+      // พื้นหลังจอ Winamp ดำสนิท
+      vCtx.fillStyle = '#000000';
       vCtx.fillRect(0, 0, vCanvas.width, vCanvas.height);
+
       const barWidth = (vCanvas.width / bufferLength) * 1.5;
       let x = 0;
+
       for (let i = 0; i < bufferLength; i++) {
         const barHeight = (dataArray[i] / 255) * vCanvas.height;
+        
+        // กราฟ Winamp แท่งไฟเขียว -> ส้ม -> แดง
         const grad = vCtx.createLinearGradient(0, vCanvas.height, 0, 0);
-        grad.addColorStop(0, '#22c55e'); grad.addColorStop(0.7, '#eab308'); grad.addColorStop(1, '#ef4444');
+        grad.addColorStop(0, '#15803d');
+        grad.addColorStop(0.6, '#22c55e');
+        grad.addColorStop(0.85, '#eab308');
+        grad.addColorStop(1, '#ef4444');
+
         vCtx.fillStyle = grad;
         vCtx.fillRect(x, vCanvas.height - barHeight, barWidth - 1, barHeight);
+        
+        // ขีดพีคด้านบนสุด (Peak lines)
+        if (barHeight > 4) {
+          vCtx.fillStyle = '#f87171';
+          vCtx.fillRect(x, vCanvas.height - barHeight - 1, barWidth - 1, 1);
+        }
+
         x += barWidth;
       }
     }
@@ -852,7 +917,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // 💬 แชท
+  // 💬 แชท MSN Edition
   // ==========================================
   let typingTimeout = null;
   if (chatInput) {
@@ -1153,6 +1218,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const files = Array.from(e.target.files).map(f => { f.type = 'mp3'; return f; });
       playlist = playlist.concat(files);
       socket.emit('dj-update-playlist', playlist.map(f => ({ name: f.name, type: f.type, videoId: f.videoId })));
+      showMsnToast("Playlist", `เพิ่ม ${files.length} เพลง MP3 เข้าคิวแล้ว!`);
     };
   }
 
@@ -1201,6 +1267,7 @@ document.addEventListener('DOMContentLoaded', () => {
           btnMic.textContent = "🛑 ปิดไมค์";
           btnMic.style.filter = "hue-rotate(280deg)";
           isBroadcastingMic = true;
+          showMsnToast("Broadcast", "เปิดไมค์จัดรายการสดแล้ว 🎙️");
         } catch (err) {
           alert("ไม่สามารถเข้าถึงไมโครโฟนได้: " + err.message);
         }
@@ -1212,6 +1279,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnMic.textContent = "🎙️ เปิดไมค์";
         btnMic.style.filter = "none";
         isBroadcastingMic = false;
+        showMsnToast("Broadcast", "ปิดไมค์แล้ว");
       }
     };
   }

@@ -11,7 +11,6 @@ const io = new Server(server, { maxHttpBufferSize: 1e7 });
 app.set('trust proxy', true);
 app.use(express.static(path.join(__dirname, 'public')));
 
-// รหัสผ่าน Super Admin
 const ADMIN_SECRET_KEY = "0024252600";
 
 let adminSocketId = null;
@@ -25,9 +24,9 @@ let songRequests = [];
 let djQueue = [];
 
 let onlineUsersCount = 0;
+let totalHitsCount = 1337; // ตัวนับผู้เข้าชมสไตล์เรโทร
 let currentVolumes = { music: 0.8, mic: 1.0 };
 
-// ฟังก์ชันเวลาและวันที่ประเทศไทย (GMT+7)
 function getThaiTime() {
   return new Date().toLocaleTimeString('th-TH', {
     timeZone: 'Asia/Bangkok',
@@ -43,7 +42,6 @@ function getTodayString() {
 }
 let currentDay = getTodayString();
 
-// ฐานข้อมูลผู้ใช้ที่ถูกแบน
 const BANNED_FILE = path.join(__dirname, 'banned_users.json');
 let bannedList = [];
 
@@ -102,7 +100,6 @@ function checkDayReset() {
   }
 }
 
-// ส่ง Sync Pulse ทุก 3 วินาที
 setInterval(() => {
   if (isDJLive && currentTrack.youtubeId && currentTrack.startedAt) {
     const currentSeconds = Math.max(0, (Date.now() - currentTrack.startedAt) / 1000);
@@ -123,13 +120,15 @@ io.on('connection', (socket) => {
   const clientIp = getClientIp(socket);
 
   if (bannedList.some(b => b.ip === clientIp)) {
-    socket.emit('banned-notice', { reason: "คุณถูกระงับการเข้าใช้งานเนื่องจากทำผิดกฎระเบียบของสถานี" });
+    socket.emit('banned-notice', { reason: "คุณถูกระงับการเข้าใช้งานสถานีชั่วคราว" });
     socket.disconnect(true);
     return;
   }
 
   onlineUsersCount++;
+  totalHitsCount++;
   io.emit('online-users-count', onlineUsersCount);
+  io.emit('hit-counter-update', totalHitsCount);
   checkDayReset();
 
   socket.emit('dj-status-update', isDJLive);
@@ -172,7 +171,6 @@ io.on('connection', (socket) => {
     io.emit('chat-message', newMsg);
   });
 
-  // Moderation: Kick / Ban
   socket.on('admin-kick-user', (targetSocketId) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     const target = io.sockets.sockets.get(targetSocketId);
@@ -202,10 +200,9 @@ io.on('connection', (socket) => {
         saveBannedList();
       }
 
-      target.emit('banned-notice', { reason: "คุณถูกแบนออกจากระบบอย่างถาวรเนื่องจากสร้างความปั่นป่วน" });
+      target.emit('banned-notice', { reason: "คุณถูกแบนออกจากระบบอย่างถาวร" });
       target.disconnect(true);
       io.emit('system-announcement', `🚫 [ระบบ] ผู้ใช้ "${targetName}" ถูกแบนออกจากสถานี`);
-
       if (adminSocketId) io.to(adminSocketId).emit('admin-banned-list-update', bannedList);
     }
   });
@@ -335,20 +332,28 @@ io.on('connection', (socket) => {
     });
   });
 
+  // แก้ไขระบบเพิ่มเพลง YouTube: มี Fallback ป้องกัน Promise ค้าง
   socket.on('dj-add-youtube-to-playlist', async (item) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
 
-    let songTitle = "YouTube Audio";
+    let songTitle = `YouTube Track [${item.videoId}]`;
     const ytUrl = `https://www.youtube.com/watch?v=${item.videoId}`;
 
     try {
-      const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(ytUrl)}&format=json`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+
+      const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(ytUrl)}&format=json`, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
       if (response.ok) {
         const info = await response.json();
         if (info && info.title) songTitle = info.title;
       }
     } catch (err) {
-      console.error("YouTube oEmbed error:", err.message);
+      console.log("oEmbed Timeout/Error, using fallback title");
     }
 
     playlist.push({

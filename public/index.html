@@ -3,19 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Y2K Messenger Radio</title>
+  <title>Y2K Messenger Radio - Winamp & MSN Edition</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <canvas id="glitter-canvas"></canvas>
   <div id="heart-container" class="heart-container"></div>
+  <div id="msn-toast-container" class="msn-toast-container"></div>
 
   <div id="main-app-window" class="desktop-wrap">
     <!-- แถบซ้าย: สถานีวิทยุและดีเจ -->
     <aside class="window-pane side-bar">
       <div class="window-header">
         <span class="icon-flower">🌸</span>
-        <span class="title">Radio Controller</span>
+        <span class="title">Radio Controller (Winamp Pro)</span>
       </div>
       
       <div class="user-badge">
@@ -30,14 +31,15 @@
       </div>
 
       <div class="side-content">
-        <!-- Now Playing -->
-        <div class="section-box">
-          <div class="section-title">Now Playing (Main)</div>
-          <div class="now-playing-box">
-            <div id="track-title" class="track-title">รอเริ่มรายการ</div>
+        <!-- Now Playing Winamp Skin -->
+        <div class="section-box winamp-chassis">
+          <div class="section-title winamp-header-title">⚡ WINAMP CLASSIC AUDIO ⚡</div>
+          <div class="now-playing-box winamp-screen">
+            <div class="lcd-glow-row">
+              <div id="track-title" class="track-title lcd-text">รอเริ่มรายการ</div>
+            </div>
             <div id="track-artist" class="track-sub">Offline</div>
 
-            <!-- YouTube Embed Frame -->
             <div id="yt-screen-wrapper" class="yt-screen-container hide"></div>
 
             <div class="track-timer-row">
@@ -45,7 +47,9 @@
               <div class="track-progress-bg"><div id="track-progress-fill" class="track-progress-fill"></div></div>
               <span id="track-time-total">00:00</span>
             </div>
-            <canvas id="visualizer-canvas" class="visualizer-bar" width="280" height="35"></canvas>
+
+            <!-- Oscilloscope & Spectrum Visualizer -->
+            <canvas id="visualizer-canvas" class="visualizer-bar" width="280" height="42"></canvas>
           </div>
           <div class="btn-group">
             <button id="btn-listen" class="y2k-btn primary-btn flex-1">▶ ฟังสถานีหลัก</button>
@@ -53,9 +57,9 @@
           </div>
         </div>
 
-        <!-- ส่งของขวัญ -->
+        <!-- กล่องส่งของขวัญแบบย้อนวัย -->
         <div class="section-box">
-          <div class="section-title">🎁 ส่งของขวัญ & ดอกไม้ให้ดีเจ</div>
+          <div class="section-title">🎁 ส่งของขวัญเสมือนให้ดีเจ</div>
           <div class="sfx-grid">
             <button type="button" class="sfx-btn gift-btn" data-gift="🌹 กุหลาบ">🌹 กุหลาบ</button>
             <button type="button" class="sfx-btn gift-btn" data-gift="📀 แผ่นทอง">📀 แผ่นทอง</button>
@@ -98,7 +102,7 @@
           <div class="section-title">Broadcast Booth</div>
           
           <div id="dj-login-section" class="btn-group">
-            <button id="btn-open-login-modal" class="y2k-btn primary-btn flex-1">🔐 เข้าสู่ระบบ</button>
+            <button id="btn-open-login-modal" class="y2k-btn primary-btn flex-1">🔐 เข้าสู่ระบบดีเจ/แอดมิน</button>
             <button id="btn-open-register-modal" class="y2k-btn request-btn">📝 สมัครดีเจ</button>
           </div>
 
@@ -220,14 +224,27 @@
             </div>
           </div>
         </div>
+
+        <!-- Y2K Retro 88x31 Badges & Hit Counter -->
+        <div class="section-box y2k-badges-box">
+          <div class="hit-counter-container">
+            <span class="hit-label">VISITOR COUNT:</span>
+            <div id="hit-counter-digits" class="hit-digits">001337</div>
+          </div>
+          <div class="badges-row">
+            <span class="micro-badge winamp-badge">WINAMP 2.91</span>
+            <span class="micro-badge ie-badge">IE 6.0 READY</span>
+            <span class="micro-badge html-badge">HTML 4.01</span>
+          </div>
+        </div>
       </div>
     </aside>
 
-    <!-- แถบขวา: ห้องแชท -->
+    <!-- แถบขวา: ห้องแชท MSN Edition -->
     <main class="window-pane chat-window">
       <div class="window-header">
         <span class="icon-bubble">💬</span>
-        <span class="title">Live Chat & Shoutbox (MSN Edition)</span>
+        <span class="title">Live Chat & Shoutbox (MSN Messenger Edition)</span>
         <label style="margin-left: auto; font-size: 11px; display: flex; align-items: center; gap: 4px; cursor: pointer;">
           <input type="checkbox" id="chk-msn-sound" checked> 🔊 เสียง MSN
         </label>
@@ -235,7 +252,7 @@
 
       <div class="marquee-ticker">
         <marquee scrollamount="4" behavior="scroll" direction="left">
-          ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • พิมพ์อิโมจิ (H) (K) (P) (F) (M) ได้เลย! ✨
+          ✨ ยินดีต้อนรับสู่ Y2K Retro Radio สถานีเพลงฮิตยุค 2000s • สเปกตรัมเต้นสดสไตล์ Winamp • พิมพ์อิโมจิ MSN เช่น (H) (K) (P) (F) (M) (L) ได้เลย! ✨
         </marquee>
       </div>
 
@@ -290,7 +307,7 @@
         </div>
       </div>
       
-      <div class="banner-bottom"><span>Retro Sound Wave 2000 • High Fidelity Stereo</span></div>
+      <div class="banner-bottom"><span>Retro Sound Wave 2000 • Winamp Spectrum • High Fidelity Stereo</span></div>
     </main>
   </div>
 
@@ -369,6 +386,6 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>
