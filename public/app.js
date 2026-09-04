@@ -178,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 
+  // Device Token Generator
   let visitorToken = localStorage.getItem('y2k_device_token');
   if (!visitorToken) {
     visitorToken = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
@@ -185,6 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   socket.emit('register-visitor', visitorToken);
 
+  // ตรวจสอบชื่อผู้ใช้
   if (usernameInput) {
     const savedName = localStorage.getItem('saved_username');
     const initialName = savedName ? savedName : 'Guest_' + Math.floor(Math.random() * 899 + 100);
@@ -299,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========================================================
-  // 🎥 ระบบเล่นเพลง YouTube (Official Iframe API ควบคุมอัตโนมัติ)
+  // 🎥 Official YouTube Iframe API
   // ========================================================
   let ytPlayer = null;
   let currentYtVideoId = null;
@@ -384,15 +386,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // 🔔 ตรวจจับเมื่อเพลงเล่นจบ (YT.PlayerState.ENDED = 0)
   function onPlayerStateChange(event) {
     if (event.data === YT.PlayerState.ENDED) {
       if ((myRole === 'admin' || myRole === 'dj') && isShowLive) {
         if (playlist.length > 0) {
-          // มีเพลงในคิว -> สั่งเล่นเพลงแรกทันที
           playItemAtIndex(0);
         } else {
-          // หมดคิว -> สั่งหยุดเล่น ไม่วนลูป
           currentYtVideoId = null;
           socket.emit('dj-track-ended');
         }
@@ -466,6 +465,9 @@ document.addEventListener('DOMContentLoaded', () => {
     showMsnToast("Studio", "▶ เล่นเพลงต่อแล้ว");
   });
 
+  // ========================================================
+  // 🎵 จัดการคิวเพลง
+  // ========================================================
   function renderPlaylist() {
     if (!playlistContainer) return;
     if (rightQueueCount) rightQueueCount.textContent = playlist ? playlist.length : 0;
@@ -598,6 +600,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  // ========================================================
+  // 💬 แชท MSN
+  // ========================================================
   function switchChatTab(tabName) {
     activeTab = tabName;
     document.querySelectorAll('#chat-tabs-header .tab').forEach(t => {
@@ -800,7 +805,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } });
 
   // ========================================================
-  // 🎛️ Audio Engine & LED Segmented Block Visualizer (Smooth Sync)
+  // 🎛️ Audio Engine & LED Segmented Block Visualizer
   // ========================================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
   let nextMicPlayTime = 0;
@@ -1358,6 +1363,40 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  function applyRoleUI(role, name) {
+    myRole = role;
+    myDJName = name;
+
+    if (role === 'admin') {
+      djLoginSection.classList.add('hide');
+      djPortalSection.classList.add('hide');
+      djControlsSection.classList.remove('hide');
+      roleBadge.textContent = "👑 Super Admin";
+      roleBadge.style.background = "#fee2e2";
+      roleBadge.style.color = "#991b1b";
+      roleBadge.style.borderColor = "#ef4444";
+      adminApprovalPanel.classList.remove('hide');
+      if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.remove('hide');
+      if (adminBannedUsersBox) adminBannedUsersBox.classList.remove('hide');
+    } else if (role === 'dj') {
+      djLoginSection.classList.add('hide');
+      djPortalSection.classList.add('hide');
+      djControlsSection.classList.remove('hide');
+      roleBadge.textContent = `🎧 DJ ${name}`;
+      roleBadge.style.background = "#fef08a";
+      roleBadge.style.color = "#713f12";
+      roleBadge.style.borderColor = "#ca8a04";
+      if (adminApprovalPanel) adminApprovalPanel.classList.add('hide');
+      if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.add('hide');
+    } else if (role === 'dj_member') {
+      djLoginSection.classList.add('hide');
+      djPortalSection.classList.remove('hide');
+      djPortalName.textContent = name;
+      usernameInput.value = name;
+    }
+    renderPlaylist();
+  }
+
   function executeLogin() {
     const username = loginUserInput.value.trim(), password = loginPassInput.value.trim();
     if (!password) {
@@ -1369,28 +1408,8 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.emit('auth-login', { username, password }, (res) => {
       if (res.success) {
         loginModal.classList.add('hide');
-        myRole = res.role;
-        myDJName = res.name;
         localStorage.setItem('auth_session', JSON.stringify({ user: username, pass: password }));
-
-        if (res.role === 'admin') {
-          djLoginSection.classList.add('hide');
-          djPortalSection.classList.add('hide');
-          djControlsSection.classList.remove('hide');
-          roleBadge.textContent = "👑 Super Admin";
-          roleBadge.style.background = "#fee2e2";
-          roleBadge.style.color = "#991b1b";
-          roleBadge.style.borderColor = "#ef4444";
-          adminApprovalPanel.classList.remove('hide');
-          if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.remove('hide');
-          if (adminBannedUsersBox) adminBannedUsersBox.classList.remove('hide');
-        } else if (res.role === 'dj_member') {
-          djLoginSection.classList.add('hide');
-          djPortalSection.classList.remove('hide');
-          djPortalName.textContent = res.name;
-          usernameInput.value = res.name;
-        }
-        renderPlaylist();
+        applyRoleUI(res.role, res.name);
       } else {
         loginError.textContent = res.message;
         loginError.classList.remove('hide');
@@ -1401,31 +1420,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginBtnConfirm) loginBtnConfirm.onclick = () => executeLogin();
   if (loginPassInput) loginPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeLogin(); });
 
+  // 🔄 กู้คืนเซสชันอัตโนมัติเมื่อเปิดเว็บหรือรีเฟรชหน้าจอ
   const savedSession = localStorage.getItem('auth_session');
   if (savedSession) {
     try {
       const parsed = JSON.parse(savedSession);
-      socket.emit('auth-login', { username: parsed.user, password: parsed.pass }, (res) => {
+      socket.emit('auth-reconnect', parsed, (res) => {
         if (res.success) {
-          myRole = res.role;
-          myDJName = res.name;
-          if (res.role === 'admin') {
-            djLoginSection.classList.add('hide');
-            djControlsSection.classList.remove('hide');
-            roleBadge.textContent = "👑 Super Admin";
-            roleBadge.style.background = "#fee2e2";
-            roleBadge.style.color = "#991b1b";
-            roleBadge.style.borderColor = "#ef4444";
-            adminApprovalPanel.classList.remove('hide');
-            if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.remove('hide');
-            if (adminBannedUsersBox) adminBannedUsersBox.classList.remove('hide');
-          } else if (res.role === 'dj_member') {
-            djLoginSection.classList.add('hide');
-            djPortalSection.classList.remove('hide');
-            djPortalName.textContent = res.name;
-            usernameInput.value = res.name;
-          }
-          renderPlaylist();
+          applyRoleUI(res.role, res.name);
         } else {
           localStorage.removeItem('auth_session');
         }
@@ -1516,19 +1518,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   socket.on('dj-approved', (djName) => {
-    myRole = 'dj';
-    myDJName = djName;
-    if (djPortalSection) djPortalSection.classList.add('hide');
-    if (djControlsSection) djControlsSection.classList.remove('hide');
-    if (roleBadge) {
-      roleBadge.textContent = `🎧 DJ ${djName}`;
-      roleBadge.style.background = "#fef08a";
-      roleBadge.style.color = "#713f12";
-      roleBadge.style.borderColor = "#ca8a04";
-    }
-    if (adminApprovalPanel) adminApprovalPanel.classList.add('hide');
-    if (adminRegisteredDjsBox) adminRegisteredDjsBox.classList.add('hide');
-    renderPlaylist();
+    applyRoleUI('dj', djName);
     alert(`🎉 แอดมินอนุมัติให้คุณ ${djName} ขึ้นจัดรายการสดแล้ว!`);
   });
 

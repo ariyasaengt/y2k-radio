@@ -15,6 +15,7 @@ const ADMIN_SECRET_KEY = "0024252600";
 
 let adminSocketId = null;
 let currentBroadcaster = null;
+let broadcasterDisconnectTimer = null; // ตัวหน่วงเวลาตัดรายการ (Grace Period)
 let isDJLive = false;
 let showStartedAt = null;
 let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
@@ -29,7 +30,45 @@ let currentVolumes = { music: 0.8, mic: 1.0 };
 
 const activeUsers = new Map();
 
-// สถิติผู้เข้าชมจริง
+// ----------------------------------------------------
+// 💾 ระบบบันทึกข้อมูลถาวร (State Persistence)
+// ----------------------------------------------------
+const STATE_FILE = path.join(__dirname, 'station_state.json');
+
+function saveStationState() {
+  try {
+    const data = {
+      isDJLive,
+      showStartedAt,
+      currentBroadcaster,
+      currentTrack,
+      todayTopic,
+      marqueeNotice,
+      pinnedMessage,
+      playlist
+    };
+    fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (err) {}
+}
+
+function loadStationState() {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
+      isDJLive = data.isDJLive || false;
+      showStartedAt = data.showStartedAt || null;
+      currentBroadcaster = data.currentBroadcaster || null;
+      currentTrack = data.currentTrack || currentTrack;
+      todayTopic = data.todayTopic || todayTopic;
+      marqueeNotice = data.marqueeNotice || marqueeNotice;
+      pinnedMessage = data.pinnedMessage || null;
+      playlist = Array.isArray(data.playlist) ? data.playlist : [];
+    }
+  } catch (err) {}
+}
+loadStationState();
+
+// สถิติผู้เข้าชม
 const STATS_FILE = path.join(__dirname, 'stats.json');
 let siteStats = { totalHits: 0, visitedTokens: [] };
 
@@ -128,6 +167,7 @@ function checkDayReset() {
     chatHistory = []; songRequests = []; pinnedMessage = null; currentDay = today;
     todayTopic = "วันนี้เปิดรับทุกแนวเพลง ทักทายกันได้นะ!";
     saveChatHistory();
+    saveStationState();
     io.emit('chat-history-cleared');
     io.emit('topic-update', todayTopic);
     io.emit('requests-update', songRequests);
@@ -147,6 +187,7 @@ function startAutoDJ() {
     youtubeId: track.videoId,
     startedAt: startedAt
   };
+  saveStationState();
   io.emit('track-update', currentTrack);
   io.emit('play-youtube-track', {
     videoId: track.videoId,
@@ -200,6 +241,8 @@ io.on('connection', (socket) => {
   });
 
   checkDayReset();
+  
+  // ส่งสถานะปัจจุบันกลับให้ผู้ใช้งานที่เพิ่งโหลดหน้าเว็บ
   socket.emit('dj-status-update', { isLive: isDJLive, startedAt: showStartedAt });
 
   let trackToSend = { ...currentTrack };
@@ -225,9 +268,57 @@ io.on('connection', (socket) => {
   socket.emit('chat-history', chatHistory);
   if (activePoll) socket.emit('poll-update', activePoll);
 
+  // ----------------------------------------------------
+  // 🔄 ระบบกู้คืนเซสชันดีเจเมื่อรีเฟรช (Session Reconnect)
+  // ----------------------------------------------------
+  socket.on('auth-reconnect', (sessionData, callback) => {
+    if (!sessionData) return callback({ success: false });
+    const { user, pass } = sessionData;
+
+    let role = null;
+    let name = user;
+
+    if (pass === ADMIN_SECRET_KEY) {
+      role = 'admin';
+      name = user || 'Super Admin';
+      adminSocketId = socket.id;
+    } else if (registeredDJs[user] && registeredDJs[user] === pass) {
+      role = 'dj_member';
+      if (currentBroadcaster && currentBroadcaster.username === user) {
+        role = 'dj';
+      }
+    }
+
+    if (role) {
+      socket.userRole = role;
+      socket.djName = name;
+
+      // ถ้ารีเฟรชขณะที่ตนเองกำลัง On-Air: ยกเลิกตัวนับเวลาตัดรายการทันที
+      if (currentBroadcaster && currentBroadcaster.username === name) {
+        if (broadcasterDisconnectTimer) {
+          clearTimeout(broadcasterDisconnectTimer);
+          broadcasterDisconnectTimer = null;
+        }
+        currentBroadcaster.socketId = socket.id;
+        socket.userRole = currentBroadcaster.role;
+      }
+
+      callback({ success: true, role: socket.userRole, name: socket.djName, isBroadcaster: (currentBroadcaster && currentBroadcaster.username === name) });
+      
+      if (role === 'admin') {
+        socket.emit('admin-dj-queue-update', djQueue);
+        socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
+        socket.emit('admin-banned-list-update', bannedList);
+      }
+    } else {
+      callback({ success: false });
+    }
+  });
+
   socket.on('dj-set-marquee', (newNotice) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     marqueeNotice = (newNotice || '').trim() || "✨ ยินดีต้อนรับสู่ Y2K Retro Radio ✨";
+    saveStationState();
     io.emit('marquee-update', marqueeNotice);
   });
 
@@ -246,6 +337,7 @@ io.on('connection', (socket) => {
     currentTrack.youtubeId = null;
     currentTrack.startedAt = null;
     currentTrack.title = "จบเพลงแล้ว (รอคิวถัดไป)";
+    saveStationState();
     io.emit('track-update', currentTrack);
     io.emit('dj-stop-youtube');
   });
@@ -325,6 +417,7 @@ io.on('connection', (socket) => {
     const winner = activePoll.votesA >= activePoll.votesB ? activePoll.songA : activePoll.songB;
     io.emit('system-announcement', `🏆 ผลโหวตชนะเลิศ: "${winner}" ได้รับคะแนนสูงสุด!`);
     playlist.unshift({ name: `▶ [โหวตชนะ] ${winner}`, type: 'youtube', videoId: '' });
+    saveStationState();
     io.emit('playlist-update', playlist);
     activePoll = null;
     io.emit('poll-update', null);
@@ -467,15 +560,21 @@ io.on('connection', (socket) => {
     isDJLive = true;
     showStartedAt = Date.now();
     currentBroadcaster = { socketId: socket.id, role: socket.userRole, username: socket.djName };
+    saveStationState();
     io.emit('dj-status-update', { isLive: true, startedAt: showStartedAt });
   });
 
   socket.on('dj-end-show', () => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    if (broadcasterDisconnectTimer) {
+      clearTimeout(broadcasterDisconnectTimer);
+      broadcasterDisconnectTimer = null;
+    }
     isDJLive = false;
     showStartedAt = null;
     currentBroadcaster = null;
     currentTrack = { title: "จบรายการแล้ว", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
+    saveStationState();
     io.emit('dj-status-update', { isLive: false, startedAt: null });
     io.emit('track-update', currentTrack);
     io.emit('dj-stop-youtube');
@@ -495,6 +594,7 @@ io.on('connection', (socket) => {
       startedAt: startedAt
     };
 
+    saveStationState();
     io.emit('track-update', currentTrack);
     io.emit('play-youtube-track', {
       videoId: ytData.videoId,
@@ -523,6 +623,7 @@ io.on('connection', (socket) => {
     } catch (err) {}
 
     playlist.push({ name: `▶ [YT] ${songTitle}`, type: 'youtube', videoId: item.videoId });
+    saveStationState();
     io.emit('playlist-update', playlist);
   });
 
@@ -534,12 +635,14 @@ io.on('connection', (socket) => {
   socket.on('dj-update-track', (data) => {
     if (!isDJLive || (socket.userRole !== 'admin' && socket.userRole !== 'dj')) return;
     currentTrack = data.track;
+    saveStationState();
     io.emit('track-update', currentTrack);
   });
 
   socket.on('dj-update-playlist', (list) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     playlist = list;
+    saveStationState();
     io.emit('playlist-update', playlist);
   });
 
@@ -553,12 +656,14 @@ io.on('connection', (socket) => {
   socket.on('dj-set-topic', (newTopic) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     todayTopic = newTopic.trim() || "เปิดเพลงสบายๆ สไตล์ Y2K";
+    saveStationState();
     io.emit('topic-update', todayTopic);
   });
 
   socket.on('dj-pin-message', (msgText) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
     pinnedMessage = msgText ? msgText.trim() : null;
+    saveStationState();
     io.emit('pinned-update', pinnedMessage);
   });
 
@@ -611,21 +716,32 @@ io.on('connection', (socket) => {
   socket.on('typing-start', (username) => socket.broadcast.emit('user-typing', { user: username || 'Guest', isTyping: true }));
   socket.on('typing-stop', () => socket.broadcast.emit('user-typing', { isTyping: false }));
 
+  // ----------------------------------------------------
+  // 🛡️ ป้องกันรายการหลุดเมื่อรีเฟรช (15s Grace Period)
+  // ----------------------------------------------------
   socket.on('disconnect', () => {
     activeUsers.delete(socket.id);
     onlineUsersCount = Math.max(0, onlineUsersCount - 1);
     io.emit('online-users-count', onlineUsersCount);
 
     djQueue = djQueue.filter(q => q.socketId !== socket.id);
-    if (adminSocketId) io.to(adminSocketId).emit('admin-dj-queue-update', djQueue);
+    if (adminSocketId && adminSocketId === socket.id) adminSocketId = null;
 
+    // ถ้าคนที่หลุดเป็นดีเจที่กำลัง On-Air อยู่ ให้รอ 15 วินาทีเผื่อเขากำลังรีเฟรชหน้าเว็บ
     if (currentBroadcaster && currentBroadcaster.socketId === socket.id) {
-      isDJLive = false;
-      showStartedAt = null;
-      currentBroadcaster = null;
-      io.emit('dj-status-update', { isLive: false, startedAt: null });
-      io.emit('dj-stop-youtube');
-      startAutoDJ();
+      if (broadcasterDisconnectTimer) clearTimeout(broadcasterDisconnectTimer);
+
+      broadcasterDisconnectTimer = setTimeout(() => {
+        // หากครบ 15 วิแล้วยังไม่กลับมาเชื่อมต่อ ให้ปิดรายการจริง
+        isDJLive = false;
+        showStartedAt = null;
+        currentBroadcaster = null;
+        broadcasterDisconnectTimer = null;
+        saveStationState();
+        io.emit('dj-status-update', { isLive: false, startedAt: null });
+        io.emit('dj-stop-youtube');
+        startAutoDJ();
+      }, 15000);
     }
   });
 });
@@ -633,5 +749,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
-  startAutoDJ();
+  if (!isDJLive) startAutoDJ();
 });
