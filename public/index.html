@@ -46,7 +46,6 @@
             </div>
             <div id="track-artist" class="track-sub">Offline</div>
 
-            <!-- กล่องสำหรับ YouTube Iframe API -->
             <div id="yt-screen-wrapper" class="yt-screen-container hide">
               <div id="yt-player-target"></div>
             </div>
@@ -187,11 +186,13 @@
               </div>
             </div>
 
+            <!-- กล่องตั้งค่าข้อความวิ่ง Marquee สำหรับดีเจ/แอดมิน พร้อมปุ่มรีเซ็ต -->
             <div class="topic-setter-box" style="margin-top: 6px;">
               <span class="sub-label">📜 ข้อความวิ่งหัวเว็บ (Marquee):</span>
               <div class="input-row">
-                <input type="text" id="dj-marquee-input" class="y2k-input flex-1" placeholder="พิมพ์ข้อความวิ่งใหม่...">
+                <input type="text" id="dj-marquee-input" class="y2k-input flex-1" placeholder="พิมพ์ข้อความใหม่ (เว้นว่างเพื่อคืนค่า)...">
                 <button type="button" id="btn-save-marquee" class="y2k-btn">📢 อัปเดต</button>
+                <button type="button" id="btn-reset-marquee" class="y2k-btn" title="ล้างและคืนค่าข้อความวิ่งเป็นค่าเริ่มต้น">🔄 รีเซ็ต</button>
               </div>
             </div>
 
@@ -433,8 +434,7 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <!-- สคริปต์ทางการของ YouTube Iframe API -->
   <script src="https://www.youtube.com/iframe_api"></script>
-  <script src="app.js?v=110"></script>
+  <script src="app.js?v=120"></script>
 </body>
 </html>

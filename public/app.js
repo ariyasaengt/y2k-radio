@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const marqueeText = document.getElementById('marquee-text');
   const djMarqueeInput = document.getElementById('dj-marquee-input');
   const btnSaveMarquee = document.getElementById('btn-save-marquee');
+  const btnResetMarquee = document.getElementById('btn-reset-marquee');
 
   const chatTabsHeader = document.getElementById('chat-tabs-header');
   const chatLogs = document.getElementById('chat-logs');
@@ -178,7 +179,6 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 
-  // Device Token Generator
   let visitorToken = localStorage.getItem('y2k_device_token');
   if (!visitorToken) {
     visitorToken = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
@@ -186,7 +186,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   socket.emit('register-visitor', visitorToken);
 
-  // ตรวจสอบชื่อผู้ใช้
   if (usernameInput) {
     const savedName = localStorage.getItem('saved_username');
     const initialName = savedName ? savedName : 'Guest_' + Math.floor(Math.random() * 899 + 100);
@@ -254,10 +253,23 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnSaveMarquee && djMarqueeInput) {
     btnSaveMarquee.onclick = () => {
       const txt = djMarqueeInput.value.trim();
-      if (!txt) return alert("กรุณาพิมพ์ข้อความวิ่งก่อนบันทึก!");
       socket.emit('dj-set-marquee', txt);
       djMarqueeInput.value = '';
-      showMsnToast("Notice Updated", "อัปเดตข้อความวิ่งเรียบร้อยแล้ว!");
+      if (!txt) {
+        showMsnToast("Notice Reset", "คืนค่าข้อความวิ่งเริ่มต้นแล้ว!");
+      } else {
+        showMsnToast("Notice Updated", "อัปเดตข้อความวิ่งเรียบร้อยแล้ว!");
+      }
+    };
+  }
+
+  if (btnResetMarquee) {
+    btnResetMarquee.onclick = () => {
+      if (confirm("ต้องการรีเซ็ตข้อความวิ่งกลับเป็นค่าเริ่มต้นใช่หรือไม่?")) {
+        socket.emit('dj-reset-marquee');
+        if (djMarqueeInput) djMarqueeInput.value = '';
+        showMsnToast("Notice Reset", "คืนค่าข้อความวิ่งเริ่มต้นแล้ว!");
+      }
     };
   }
 
@@ -300,9 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ========================================================
-  // 🎥 Official YouTube Iframe API
-  // ========================================================
+  // Official YouTube Iframe API
   let ytPlayer = null;
   let currentYtVideoId = null;
   let isYtApiReady = false;
@@ -465,9 +475,6 @@ document.addEventListener('DOMContentLoaded', () => {
     showMsnToast("Studio", "▶ เล่นเพลงต่อแล้ว");
   });
 
-  // ========================================================
-  // 🎵 จัดการคิวเพลง
-  // ========================================================
   function renderPlaylist() {
     if (!playlistContainer) return;
     if (rightQueueCount) rightQueueCount.textContent = playlist ? playlist.length : 0;
@@ -600,9 +607,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
-  // ========================================================
-  // 💬 แชท MSN
-  // ========================================================
   function switchChatTab(tabName) {
     activeTab = tabName;
     document.querySelectorAll('#chat-tabs-header .tab').forEach(t => {
@@ -804,9 +808,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnSend) btnSend.onclick = sendMessage;
   if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } });
 
-  // ========================================================
-  // 🎛️ Audio Engine & LED Segmented Block Visualizer
-  // ========================================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
   let nextMicPlayTime = 0;
 
@@ -1420,7 +1421,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginBtnConfirm) loginBtnConfirm.onclick = () => executeLogin();
   if (loginPassInput) loginPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeLogin(); });
 
-  // 🔄 กู้คืนเซสชันอัตโนมัติเมื่อเปิดเว็บหรือรีเฟรชหน้าจอ
   const savedSession = localStorage.getItem('auth_session');
   if (savedSession) {
     try {

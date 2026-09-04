@@ -12,15 +12,16 @@ app.set('trust proxy', true);
 app.use(express.static(path.join(__dirname, 'public')));
 
 const ADMIN_SECRET_KEY = "0024252600";
+const DEFAULT_MARQUEE = "✨ ยินดีต้อนรับสู่ Y2K Retro Radio คลื่นเพลงฮิตยุค 2000s • พิมพ์โค้ดสี MSN สั่นสะกิดจอ ส่งเพลงบอกความในใจได้ตลอด 24 ชม. ✨";
 
 let adminSocketId = null;
 let currentBroadcaster = null;
-let broadcasterDisconnectTimer = null; // ตัวหน่วงเวลาตัดรายการ (Grace Period)
+let broadcasterDisconnectTimer = null;
 let isDJLive = false;
 let showStartedAt = null;
 let currentTrack = { title: "รอเริ่มรายการ", artist: "Offline", duration: 0, youtubeId: null, startedAt: null };
 let todayTopic = "ยินดีต้อนรับสู่ Y2K Radio! ขอเพลงกันเข้ามาได้เลย ✨";
-let marqueeNotice = "✨ ยินดีต้อนรับสู่ Y2K Retro Radio คลื่นเพลงฮิตยุค 2000s • พิมพ์โค้ดสี MSN สั่นสะกิดจอ ส่งเพลงบอกความในใจได้ตลอด 24 ชม. ✨";
+let marqueeNotice = DEFAULT_MARQUEE;
 let pinnedMessage = null;
 let playlist = [];
 let songRequests = [];
@@ -30,9 +31,7 @@ let currentVolumes = { music: 0.8, mic: 1.0 };
 
 const activeUsers = new Map();
 
-// ----------------------------------------------------
-// 💾 ระบบบันทึกข้อมูลถาวร (State Persistence)
-// ----------------------------------------------------
+// ระบบบันทึกสถานะสถานีลงไฟล์ JSON ถาวร
 const STATE_FILE = path.join(__dirname, 'station_state.json');
 
 function saveStationState() {
@@ -60,7 +59,7 @@ function loadStationState() {
       currentBroadcaster = data.currentBroadcaster || null;
       currentTrack = data.currentTrack || currentTrack;
       todayTopic = data.todayTopic || todayTopic;
-      marqueeNotice = data.marqueeNotice || marqueeNotice;
+      marqueeNotice = data.marqueeNotice || DEFAULT_MARQUEE;
       pinnedMessage = data.pinnedMessage || null;
       playlist = Array.isArray(data.playlist) ? data.playlist : [];
     }
@@ -68,7 +67,6 @@ function loadStationState() {
 }
 loadStationState();
 
-// สถิติผู้เข้าชม
 const STATS_FILE = path.join(__dirname, 'stats.json');
 let siteStats = { totalHits: 0, visitedTokens: [] };
 
@@ -241,8 +239,6 @@ io.on('connection', (socket) => {
   });
 
   checkDayReset();
-  
-  // ส่งสถานะปัจจุบันกลับให้ผู้ใช้งานที่เพิ่งโหลดหน้าเว็บ
   socket.emit('dj-status-update', { isLive: isDJLive, startedAt: showStartedAt });
 
   let trackToSend = { ...currentTrack };
@@ -268,9 +264,6 @@ io.on('connection', (socket) => {
   socket.emit('chat-history', chatHistory);
   if (activePoll) socket.emit('poll-update', activePoll);
 
-  // ----------------------------------------------------
-  // 🔄 ระบบกู้คืนเซสชันดีเจเมื่อรีเฟรช (Session Reconnect)
-  // ----------------------------------------------------
   socket.on('auth-reconnect', (sessionData, callback) => {
     if (!sessionData) return callback({ success: false });
     const { user, pass } = sessionData;
@@ -293,7 +286,6 @@ io.on('connection', (socket) => {
       socket.userRole = role;
       socket.djName = name;
 
-      // ถ้ารีเฟรชขณะที่ตนเองกำลัง On-Air: ยกเลิกตัวนับเวลาตัดรายการทันที
       if (currentBroadcaster && currentBroadcaster.username === name) {
         if (broadcasterDisconnectTimer) {
           clearTimeout(broadcasterDisconnectTimer);
@@ -317,7 +309,15 @@ io.on('connection', (socket) => {
 
   socket.on('dj-set-marquee', (newNotice) => {
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
-    marqueeNotice = (newNotice || '').trim() || "✨ ยินดีต้อนรับสู่ Y2K Retro Radio ✨";
+    const cleanText = (newNotice || '').trim();
+    marqueeNotice = cleanText || DEFAULT_MARQUEE;
+    saveStationState();
+    io.emit('marquee-update', marqueeNotice);
+  });
+
+  socket.on('dj-reset-marquee', () => {
+    if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+    marqueeNotice = DEFAULT_MARQUEE;
     saveStationState();
     io.emit('marquee-update', marqueeNotice);
   });
@@ -716,9 +716,6 @@ io.on('connection', (socket) => {
   socket.on('typing-start', (username) => socket.broadcast.emit('user-typing', { user: username || 'Guest', isTyping: true }));
   socket.on('typing-stop', () => socket.broadcast.emit('user-typing', { isTyping: false }));
 
-  // ----------------------------------------------------
-  // 🛡️ ป้องกันรายการหลุดเมื่อรีเฟรช (15s Grace Period)
-  // ----------------------------------------------------
   socket.on('disconnect', () => {
     activeUsers.delete(socket.id);
     onlineUsersCount = Math.max(0, onlineUsersCount - 1);
@@ -727,12 +724,10 @@ io.on('connection', (socket) => {
     djQueue = djQueue.filter(q => q.socketId !== socket.id);
     if (adminSocketId && adminSocketId === socket.id) adminSocketId = null;
 
-    // ถ้าคนที่หลุดเป็นดีเจที่กำลัง On-Air อยู่ ให้รอ 15 วินาทีเผื่อเขากำลังรีเฟรชหน้าเว็บ
     if (currentBroadcaster && currentBroadcaster.socketId === socket.id) {
       if (broadcasterDisconnectTimer) clearTimeout(broadcasterDisconnectTimer);
 
       broadcasterDisconnectTimer = setTimeout(() => {
-        // หากครบ 15 วิแล้วยังไม่กลับมาเชื่อมต่อ ให้ปิดรายการจริง
         isDJLive = false;
         showStartedAt = null;
         currentBroadcaster = null;
