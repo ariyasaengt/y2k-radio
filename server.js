@@ -31,7 +31,9 @@ let currentVolumes = { music: 0.8, mic: 1.0 };
 
 const activeUsers = new Map();
 
-// ระบบบันทึกสถานะสถานีลงไฟล์ JSON ถาวร
+// ----------------------------------------------------
+// 💾 ระบบบันทึกสถานะสถานีลงไฟล์ JSON ถาวร
+// ----------------------------------------------------
 const STATE_FILE = path.join(__dirname, 'station_state.json');
 
 function saveStationState() {
@@ -67,6 +69,34 @@ function loadStationState() {
 }
 loadStationState();
 
+// ----------------------------------------------------
+// 💾 ฐานข้อมูลบัญชีดีเจ (DJs Database)
+// ----------------------------------------------------
+const DJS_FILE = path.join(__dirname, 'djs_database.json');
+let registeredDJs = {};
+
+function loadRegisteredDJs() {
+  try {
+    if (fs.existsSync(DJS_FILE)) {
+      const content = fs.readFileSync(DJS_FILE, 'utf-8');
+      registeredDJs = JSON.parse(content || '{}');
+    } else {
+      registeredDJs = {};
+      saveRegisteredDJs();
+    }
+  } catch (err) {
+    registeredDJs = {};
+  }
+}
+
+function saveRegisteredDJs() {
+  try {
+    fs.writeFileSync(DJS_FILE, JSON.stringify(registeredDJs, null, 2), 'utf-8');
+  } catch (err) {}
+}
+loadRegisteredDJs();
+
+// สถิติผู้เข้าชม
 const STATS_FILE = path.join(__dirname, 'stats.json');
 let siteStats = { totalHits: 0, visitedTokens: [] };
 
@@ -130,20 +160,6 @@ loadBannedList();
 
 const CHAT_FILE = path.join(__dirname, 'chat_history.json');
 let chatHistory = [];
-
-const DJS_FILE = path.join(__dirname, 'djs_database.json');
-let registeredDJs = {};
-
-function loadRegisteredDJs() {
-  try {
-    if (fs.existsSync(DJS_FILE)) registeredDJs = JSON.parse(fs.readFileSync(DJS_FILE, 'utf-8'));
-    else { registeredDJs = {}; saveRegisteredDJs(); }
-  } catch (err) {}
-}
-function saveRegisteredDJs() {
-  try { fs.writeFileSync(DJS_FILE, JSON.stringify(registeredDJs, null, 2), 'utf-8'); } catch (err) {}
-}
-loadRegisteredDJs();
 
 function loadChatHistory() {
   try {
@@ -264,6 +280,9 @@ io.on('connection', (socket) => {
   socket.emit('chat-history', chatHistory);
   if (activePoll) socket.emit('poll-update', activePoll);
 
+  // ----------------------------------------------------
+  // 🔄 ระบบกู้คืนเซสชัน & กู้คืนฐานข้อมูลดีเจ (Auto-Restore)
+  // ----------------------------------------------------
   socket.on('auth-reconnect', (sessionData, callback) => {
     if (!sessionData) return callback({ success: false });
     const { user, pass } = sessionData;
@@ -300,10 +319,27 @@ io.on('connection', (socket) => {
       if (role === 'admin') {
         socket.emit('admin-dj-queue-update', djQueue);
         socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
+        socket.emit('admin-djs-backup-sync', registeredDJs);
         socket.emit('admin-banned-list-update', bannedList);
       }
     } else {
       callback({ success: false });
+    }
+  });
+
+  // กู้คืนฐานข้อมูลดีเจจาก LocalStorage แอดมิน
+  socket.on('admin-restore-djs-backup', (backupData) => {
+    if (socket.userRole !== 'admin' || !backupData) return;
+    let hasNew = false;
+    for (const [djUser, djPass] of Object.entries(backupData)) {
+      if (!registeredDJs[djUser]) {
+        registeredDJs[djUser] = djPass;
+        hasNew = true;
+      }
+    }
+    if (hasNew) {
+      saveRegisteredDJs();
+      io.emit('admin-registered-djs-update', Object.keys(registeredDJs));
     }
   });
 
@@ -485,7 +521,11 @@ io.on('connection', (socket) => {
 
     registeredDJs[cleanUser] = cleanPass;
     saveRegisteredDJs();
-    if (adminSocketId) io.to(adminSocketId).emit('admin-registered-djs-update', Object.keys(registeredDJs));
+    
+    if (adminSocketId) {
+      io.to(adminSocketId).emit('admin-registered-djs-update', Object.keys(registeredDJs));
+      io.to(adminSocketId).emit('admin-djs-backup-sync', registeredDJs);
+    }
     callback({ success: true, message: "สมัครบัญชีดีเจสำเร็จ!" });
   });
 
@@ -500,6 +540,7 @@ io.on('connection', (socket) => {
       callback({ success: true, role: 'admin', name: socket.djName });
       socket.emit('admin-dj-queue-update', djQueue);
       socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
+      socket.emit('admin-djs-backup-sync', registeredDJs);
       socket.emit('admin-banned-list-update', bannedList);
       return;
     }
@@ -519,6 +560,7 @@ io.on('connection', (socket) => {
     delete registeredDJs[djNameToDelete];
     saveRegisteredDJs();
     socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
+    socket.emit('admin-djs-backup-sync', registeredDJs);
   });
 
   socket.on('dj-request-queue', () => {

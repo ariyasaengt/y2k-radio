@@ -1429,6 +1429,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginBtnConfirm) loginBtnConfirm.onclick = () => executeLogin();
   if (loginPassInput) loginPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeLogin(); });
 
+  // กู้คืนเซสชันล็อกอินอัตโนมัติเมื่อเปิดเว็บหรือรีเฟรชหน้าจอ
   const savedSession = localStorage.getItem('auth_session');
   if (savedSession) {
     try {
@@ -1477,14 +1478,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
+  // ----------------------------------------------------
+  // 💾 รับข้อมูลสำรองดีเจ และกู้คืนฐานข้อมูลอัตโนมัติ
+  // ----------------------------------------------------
+  socket.on('admin-djs-backup-sync', (allDjsData) => {
+    if (myRole === 'admin' && allDjsData && Object.keys(allDjsData).length > 0) {
+      localStorage.setItem('y2k_dj_database_backup', JSON.stringify(allDjsData));
+    }
+  });
+
   socket.on('admin-registered-djs-update', (djList) => {
     if (myRole !== 'admin' || !registeredDjsList) return;
-    regDjCount.textContent = djList.length;
+
+    // หากเซิร์ฟเวอร์เพิ่ง Deploy ใหม่แล้วรายชื่อว่าง ให้ดึงสำรองในเครื่องแอดมินกู้คืนกลับทันที
+    if (!djList || djList.length === 0) {
+      const localBackup = localStorage.getItem('y2k_dj_database_backup');
+      if (localBackup) {
+        try {
+          const parsed = JSON.parse(localBackup);
+          if (Object.keys(parsed).length > 0) {
+            socket.emit('admin-restore-djs-backup', parsed);
+            return;
+          }
+        } catch(e) {}
+      }
+    }
+
+    regDjCount.textContent = djList ? djList.length : 0;
     registeredDjsList.innerHTML = '';
-    if (djList.length === 0) {
+
+    if (!djList || djList.length === 0) {
       registeredDjsList.innerHTML = '<li>ยังไม่มีดีเจลงทะเบียน</li>';
       return;
     }
+
     djList.forEach(name => {
       const li = document.createElement('li');
       li.innerHTML = `
@@ -1493,10 +1520,21 @@ document.addEventListener('DOMContentLoaded', () => {
       `;
       registeredDjsList.appendChild(li);
     });
+
     registeredDjsList.querySelectorAll('.del-dj-btn').forEach(btn => {
       btn.onclick = () => {
         const target = btn.getAttribute('data-name');
-        if (confirm(`ต้องการลบบัญชีดีเจ "${target}" ออกจากระบบใช่หรือไม่?`)) socket.emit('admin-delete-dj', target);
+        if (confirm(`ต้องการลบบัญชีดีเจ "${target}" ออกจากระบบใช่หรือไม่?`)) {
+          const localBackup = localStorage.getItem('y2k_dj_database_backup');
+          if (localBackup) {
+            try {
+              const parsed = JSON.parse(localBackup);
+              delete parsed[target];
+              localStorage.setItem('y2k_dj_database_backup', JSON.stringify(parsed));
+            } catch(e) {}
+          }
+          socket.emit('admin-delete-dj', target);
+        }
       };
     });
   });
