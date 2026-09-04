@@ -179,6 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   }
 
+  // Device Token Generator
   let visitorToken = localStorage.getItem('y2k_device_token');
   if (!visitorToken) {
     visitorToken = 'dev_' + Math.random().toString(36).substring(2, 9) + Date.now();
@@ -186,6 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   socket.emit('register-visitor', visitorToken);
 
+  // ตรวจสอบชื่อผู้ใช้
   if (usernameInput) {
     const savedName = localStorage.getItem('saved_username');
     const initialName = savedName ? savedName : 'Guest_' + Math.floor(Math.random() * 899 + 100);
@@ -715,6 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/\(L\)/gi, '❤️');
   }
 
+  // แสดงผลข้อความแชท พร้อมติดยศดีเจทุกสถานะ
   function renderMessage(data) {
     if (!chatLogs) return;
     const bubble = document.createElement('div');
@@ -722,8 +725,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const s = data.style || {};
 
     let roleTag = '';
-    if (data.role === 'admin') roleTag = `<span class="role-badge-admin">👑 Super Admin</span>`;
-    else if (data.role === 'dj') roleTag = `<span class="role-badge-dj">🎧 On-Air DJ</span>`;
+    if (data.role === 'admin') {
+      roleTag = `<span class="role-badge-admin">👑 Super Admin</span>`;
+    } else if (data.role === 'dj') {
+      roleTag = `<span class="role-badge-dj">🎧 On-Air DJ</span>`;
+    } else if (data.role === 'dj_member') {
+      roleTag = `<span class="role-badge-dj">🎧 DJ Station</span>`;
+    }
 
     let modButtons = '';
     if ((myRole === 'admin' || myRole === 'dj') && data.senderSocketId && data.role !== 'admin' && data.senderSocketId !== socket.id) {
