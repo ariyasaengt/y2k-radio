@@ -32,7 +32,7 @@ let currentVolumes = { music: 0.8, mic: 1.0 };
 const activeUsers = new Map();
 
 // ----------------------------------------------------
-// 💾 ระบบบันทึกสถานะสถานีลงไฟล์ JSON ถาวร
+// 💾 บันทึกสถานะสถานีลงไฟล์ JSON ถาวร
 // ----------------------------------------------------
 const STATE_FILE = path.join(__dirname, 'station_state.json');
 
@@ -281,7 +281,7 @@ io.on('connection', (socket) => {
   if (activePoll) socket.emit('poll-update', activePoll);
 
   // ----------------------------------------------------
-  // 🔄 ระบบกู้คืนเซสชัน & กู้คืนฐานข้อมูลดีเจ (Auto-Restore)
+  // 🔄 กู้คืนเซสชัน & บังคับยศ Admin เสมอถ้าคีย์ถูกต้อง
   // ----------------------------------------------------
   socket.on('auth-reconnect', (sessionData, callback) => {
     if (!sessionData) return callback({ success: false });
@@ -290,44 +290,51 @@ io.on('connection', (socket) => {
     let role = null;
     let name = user;
 
+    // ตรวจสอบสิทธิ์แอดมินเป็นอันดับแรกเสมอ
     if (pass === ADMIN_SECRET_KEY) {
       role = 'admin';
       name = user || 'Super Admin';
-      adminSocketId = socket.id;
-    } else if (registeredDJs[user] && registeredDJs[user] === pass) {
-      role = 'dj_member';
-      if (currentBroadcaster && currentBroadcaster.username === user) {
-        role = 'dj';
-      }
-    }
-
-    if (role) {
-      socket.userRole = role;
+      socket.userRole = 'admin';
       socket.djName = name;
+      adminSocketId = socket.id;
 
-      if (currentBroadcaster && currentBroadcaster.username === name) {
+      if (currentBroadcaster && (currentBroadcaster.username === name || currentBroadcaster.role === 'admin')) {
         if (broadcasterDisconnectTimer) {
           clearTimeout(broadcasterDisconnectTimer);
           broadcasterDisconnectTimer = null;
         }
         currentBroadcaster.socketId = socket.id;
-        socket.userRole = currentBroadcaster.role;
       }
 
-      callback({ success: true, role: socket.userRole, name: socket.djName, isBroadcaster: (currentBroadcaster && currentBroadcaster.username === name) });
-      
-      if (role === 'admin') {
-        socket.emit('admin-dj-queue-update', djQueue);
-        socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
-        socket.emit('admin-djs-backup-sync', registeredDJs);
-        socket.emit('admin-banned-list-update', bannedList);
-      }
-    } else {
-      callback({ success: false });
+      callback({ success: true, role: 'admin', name: name, isBroadcaster: (currentBroadcaster && currentBroadcaster.role === 'admin') });
+      socket.emit('admin-dj-queue-update', djQueue);
+      socket.emit('admin-registered-djs-update', Object.keys(registeredDJs));
+      socket.emit('admin-djs-backup-sync', registeredDJs);
+      socket.emit('admin-banned-list-update', bannedList);
+      return;
     }
+
+    // กรณีเป็นสมาชิกดีเจ
+    if (registeredDJs[user] && registeredDJs[user] === pass) {
+      role = 'dj_member';
+      if (currentBroadcaster && currentBroadcaster.username === user) {
+        role = 'dj';
+        if (broadcasterDisconnectTimer) {
+          clearTimeout(broadcasterDisconnectTimer);
+          broadcasterDisconnectTimer = null;
+        }
+        currentBroadcaster.socketId = socket.id;
+      }
+      socket.userRole = role;
+      socket.djName = name;
+      callback({ success: true, role: role, name: name, isBroadcaster: (currentBroadcaster && currentBroadcaster.username === name) });
+      return;
+    }
+
+    callback({ success: false });
   });
 
-  // กู้คืนฐานข้อมูลดีเจจาก LocalStorage แอดมิน
+  // กู้คืนฐานข้อมูลดีเจจาก LocalStorage ของแอดมิน
   socket.on('admin-restore-djs-backup', (backupData) => {
     if (socket.userRole !== 'admin' || !backupData) return;
     let hasNew = false;
@@ -392,6 +399,12 @@ io.on('connection', (socket) => {
     activeUsers.set(socket.id, cleanUser);
     socket.currentNick = cleanUser;
 
+    // ตรวจสอบบทบาทจริง ป้องกันการปลอมแปลงสิทธิ์
+    let assignedRole = socket.userRole || 'listener';
+    if (assignedRole === 'listener' && data.role && data.role !== 'admin') {
+      assignedRole = data.role;
+    }
+
     const newMsg = {
       id: Date.now() + Math.random().toString(36).substring(2, 5),
       senderSocketId: socket.id,
@@ -399,7 +412,7 @@ io.on('connection', (socket) => {
       status: data.status || '',
       text: data.text,
       style: data.style || {},
-      role: socket.userRole || 'listener',
+      role: assignedRole,
       time: getThaiTime()
     };
     chatHistory.push(newMsg);

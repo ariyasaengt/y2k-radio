@@ -717,7 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/\(L\)/gi, '❤️');
   }
 
-  // แสดงผลข้อความแชท พร้อมติดยศดีเจทุกสถานะ
+  // แสดงผลข้อความแชท พร้อมยศ Super Admin / DJ On-Air / DJ Station
   function renderMessage(data) {
     if (!chatLogs) return;
     const bubble = document.createElement('div');
@@ -807,7 +807,13 @@ document.addEventListener('DOMContentLoaded', () => {
         text: text
       });
     } else {
-      socket.emit('chat-message', { user, status, text, style: { ...currentStyle } });
+      socket.emit('chat-message', { 
+        user, 
+        status, 
+        text, 
+        role: myRole, // ส่งยศปัจจุบันติดไปทุกข้อความ
+        style: { ...currentStyle } 
+      });
     }
 
     chatInput.value = ''; chatInput.focus();
@@ -1429,7 +1435,6 @@ document.addEventListener('DOMContentLoaded', () => {
   if (loginBtnConfirm) loginBtnConfirm.onclick = () => executeLogin();
   if (loginPassInput) loginPassInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') executeLogin(); });
 
-  // กู้คืนเซสชันล็อกอินอัตโนมัติเมื่อเปิดเว็บหรือรีเฟรชหน้าจอ
   const savedSession = localStorage.getItem('auth_session');
   if (savedSession) {
     try {
@@ -1478,9 +1483,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ----------------------------------------------------
-  // 💾 รับข้อมูลสำรองดีเจ และกู้คืนฐานข้อมูลอัตโนมัติ
-  // ----------------------------------------------------
+  // สำรองฐานข้อมูลดีเจฝั่งแอดมิน
   socket.on('admin-djs-backup-sync', (allDjsData) => {
     if (myRole === 'admin' && allDjsData && Object.keys(allDjsData).length > 0) {
       localStorage.setItem('y2k_dj_database_backup', JSON.stringify(allDjsData));
@@ -1490,7 +1493,6 @@ document.addEventListener('DOMContentLoaded', () => {
   socket.on('admin-registered-djs-update', (djList) => {
     if (myRole !== 'admin' || !registeredDjsList) return;
 
-    // หากเซิร์ฟเวอร์เพิ่ง Deploy ใหม่แล้วรายชื่อว่าง ให้ดึงสำรองในเครื่องแอดมินกู้คืนกลับทันที
     if (!djList || djList.length === 0) {
       const localBackup = localStorage.getItem('y2k_dj_database_backup');
       if (localBackup) {
@@ -1615,7 +1617,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const p = particles[i];
       p.x += p.vx; p.y += p.vy; p.alpha -= 0.025;
       gCtx.fillStyle = p.color; gCtx.globalAlpha = Math.max(0, p.alpha);
-      gCtx.beginPath(); gCtx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2); gCtx.fill();
+      gCtx.beginPath(); gCtx.arc(p.x, p.size / 2, 0, Math.PI * 2); gCtx.fill();
       if (p.alpha <= 0) { particles.splice(i, 1); i--; }
     }
     requestAnimationFrame(animateGlitter);
