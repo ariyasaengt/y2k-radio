@@ -298,26 +298,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ========================================================
+  // 🎥 ระบบเล่นเพลง YouTube (Official Iframe API ควบคุมอัตโนมัติ)
+  // ========================================================
+  let ytPlayer = null;
   let currentYtVideoId = null;
+  let isYtApiReady = false;
   const ytScreenWrapper = document.getElementById('yt-screen-wrapper');
 
-  function sendIframeCommand(func, args = []) {
-    const iframe = document.querySelector('#yt-screen-wrapper iframe');
-    if (iframe && iframe.contentWindow) {
-      iframe.contentWindow.postMessage(JSON.stringify({
-        event: 'command',
-        func: func,
-        args: args
-      }), '*');
-    }
-  }
+  window.onYouTubeIframeAPIReady = function () {
+    isYtApiReady = true;
+  };
 
   function playYouTubeTrack(videoId, title, seekTo = 0) {
     if (!videoId) return;
 
-    // ถ้ากำลังเล่นเพลงเดิมอยู่แล้ว ไม่ต้องโหลด iframe ซ้ำ
-    const existingIframe = document.getElementById('active-yt-iframe');
-    if (currentYtVideoId === videoId && existingIframe) {
+    if (currentYtVideoId === videoId && ytPlayer) {
       if (trackTitle) trackTitle.textContent = title || "YouTube Track";
       return;
     }
@@ -325,20 +321,57 @@ document.addEventListener('DOMContentLoaded', () => {
     currentYtVideoId = videoId;
     isMusicPaused = false;
 
-    if (ytScreenWrapper) {
-      ytScreenWrapper.classList.remove('hide');
-      const startSec = Math.max(0, Math.floor(seekTo || 0));
-      const isMuted = !isListeningToMain ? 1 : 0;
-      
-      ytScreenWrapper.innerHTML = `
-        <iframe id="active-yt-iframe"
-          width="100%" height="140"
-          src="https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&playsinline=1&controls=1&rel=0&start=${startSec}&mute=${isMuted}"
-          frameborder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowfullscreen>
-        </iframe>
-      `;
+    if (ytScreenWrapper) ytScreenWrapper.classList.remove('hide');
+    const startSec = Math.max(0, Math.floor(seekTo || 0));
+
+    if (ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+      ytPlayer.loadVideoById({
+        videoId: videoId,
+        startSeconds: startSec
+      });
+      if (!isListeningToMain) ytPlayer.mute();
+      else {
+        ytPlayer.unMute();
+        ytPlayer.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
+      }
+    } else {
+      const createPlayer = () => {
+        ytPlayer = new YT.Player('yt-player-target', {
+          height: '140',
+          width: '100%',
+          videoId: videoId,
+          playerVars: {
+            autoplay: 1,
+            controls: 1,
+            rel: 0,
+            playsinline: 1,
+            start: startSec
+          },
+          events: {
+            onReady: (event) => {
+              if (!isListeningToMain) event.target.mute();
+              else {
+                event.target.unMute();
+                event.target.setVolume(sliderMusicVol ? parseInt(sliderMusicVol.value) : 80);
+              }
+              event.target.playVideo();
+            },
+            onStateChange: onPlayerStateChange
+          }
+        });
+      };
+
+      if (isYtApiReady) {
+        createPlayer();
+      } else {
+        const checkReady = setInterval(() => {
+          if (window.YT && window.YT.Player) {
+            clearInterval(checkReady);
+            isYtApiReady = true;
+            createPlayer();
+          }
+        }, 100);
+      }
     }
 
     if (trackTitle) trackTitle.textContent = title || "YouTube Track";
@@ -351,24 +384,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  window.addEventListener('message', (e) => {
-    try {
-      if (typeof e.data !== 'string') return;
-      const data = JSON.parse(e.data);
-      if (data.event === 'infoDelivery' && data.info) {
-        if (data.info.playerState === 0) {
-          if (myRole === 'admin' || myRole === 'dj') {
-            if (isShowLive && playlist.length > 0) {
-              playItemAtIndex(0);
-            } else {
-              currentYtVideoId = null;
-              socket.emit('dj-track-ended');
-            }
-          }
+  // 🔔 ตรวจจับเมื่อเพลงเล่นจบ (YT.PlayerState.ENDED = 0)
+  function onPlayerStateChange(event) {
+    if (event.data === YT.PlayerState.ENDED) {
+      if ((myRole === 'admin' || myRole === 'dj') && isShowLive) {
+        if (playlist.length > 0) {
+          // มีเพลงในคิว -> สั่งเล่นเพลงแรกทันที
+          playItemAtIndex(0);
+        } else {
+          // หมดคิว -> สั่งหยุดเล่น ไม่วนลูป
+          currentYtVideoId = null;
+          socket.emit('dj-track-ended');
         }
       }
-    } catch(err) {}
-  });
+    }
+  }
+
+  function sendIframeCommand(func, args = []) {
+    if (!ytPlayer) return;
+    try {
+      if (func === 'unMute' && typeof ytPlayer.unMute === 'function') ytPlayer.unMute();
+      if (func === 'mute' && typeof ytPlayer.mute === 'function') ytPlayer.mute();
+      if (func === 'playVideo' && typeof ytPlayer.playVideo === 'function') ytPlayer.playVideo();
+      if (func === 'pauseVideo' && typeof ytPlayer.pauseVideo === 'function') ytPlayer.pauseVideo();
+      if (func === 'setVolume' && typeof ytPlayer.setVolume === 'function') ytPlayer.setVolume(args[0]);
+    } catch (e) {}
+  }
 
   socket.on('radio-sync-pulse', () => {});
 
@@ -380,8 +421,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('dj-stop-youtube', () => {
     currentYtVideoId = null;
+    if (ytPlayer && typeof ytPlayer.stopVideo === 'function') {
+      ytPlayer.stopVideo();
+    }
     if (ytScreenWrapper) {
-      ytScreenWrapper.innerHTML = '';
       ytScreenWrapper.classList.add('hide');
     }
   });
@@ -756,6 +799,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnSend) btnSend.onclick = sendMessage;
   if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } });
 
+  // ========================================================
+  // 🎛️ Audio Engine & LED Segmented Block Visualizer (Smooth Sync)
+  // ========================================================
   let listenAudioCtx = null, musicGainNode = null, micGainNode = null, analyserNode = null, currentMusicSource = null;
   let nextMicPlayTime = 0;
 

@@ -46,7 +46,10 @@
             </div>
             <div id="track-artist" class="track-sub">Offline</div>
 
-            <div id="yt-screen-wrapper" class="yt-screen-container hide"></div>
+            <!-- กล่องสำหรับ YouTube Iframe API -->
+            <div id="yt-screen-wrapper" class="yt-screen-container hide">
+              <div id="yt-player-target"></div>
+            </div>
 
             <div class="track-timer-row">
               <span id="track-time-current">00:00</span>
@@ -184,7 +187,6 @@
               </div>
             </div>
 
-            <!-- กล่องตั้งค่าข้อความวิ่ง Marquee สำหรับดีเจ/แอดมิน -->
             <div class="topic-setter-box" style="margin-top: 6px;">
               <span class="sub-label">📜 ข้อความวิ่งหัวเว็บ (Marquee):</span>
               <div class="input-row">
@@ -431,6 +433,8 @@
   </div>
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-  <script src="app.js?v=99"></script>
+  <!-- สคริปต์ทางการของ YouTube Iframe API -->
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="app.js?v=110"></script>
 </body>
 </html>
