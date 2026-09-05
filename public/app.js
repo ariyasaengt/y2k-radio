@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   socket.emit('register-visitor', visitorToken);
 
-  // ตรวจสอบชื่อผู้ใช้
+  // ตรวจสอบชื่อผู้ใช้เริ่มต้น
   if (usernameInput) {
     const savedName = localStorage.getItem('saved_username');
     const initialName = savedName ? savedName : 'Guest_' + Math.floor(Math.random() * 899 + 100);
@@ -398,10 +398,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // 🔔 เมื่อเพลงเล่นจบ ตรวจจับและหยิบเพลงถัดไปในคิวมาเล่นต่อเนื่องทันที
   function onPlayerStateChange(event) {
     if (event.data === YT.PlayerState.ENDED) {
-      if ((myRole === 'admin' || myRole === 'dj') && isShowLive) {
-        if (playlist.length > 0) {
+      if (myRole === 'admin' || myRole === 'dj') {
+        if (playlist && playlist.length > 0) {
           playItemAtIndex(0);
         } else {
           currentYtVideoId = null;
@@ -562,12 +563,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // เล่นเพลงและเริ่ม On-Air ให้อัตโนมัติทันที
   function playItemAtIndex(idx) {
-    if (!playlist[idx]) return;
+    if (!playlist || !playlist[idx]) return;
 
-    if (!isShowLive) {
-      alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนเปิดเพลงครับ!");
-      return;
+    if (!isShowLive && (myRole === 'admin' || myRole === 'dj')) {
+      socket.emit('dj-start-show');
     }
 
     const item = playlist.splice(idx, 1)[0];
@@ -578,7 +579,12 @@ document.addEventListener('DOMContentLoaded', () => {
       socket.emit('dj-play-youtube', { videoId: item.videoId, title: item.name });
     } else {
       socket.emit('dj-stop-youtube');
-      socket.emit('dj-update-track', { track: { title: item.name, artist: myRole === 'admin' ? "Super Admin (MP3)" : `DJ ${myDJName} (MP3)` } });
+      socket.emit('dj-update-track', { 
+        track: { 
+          title: item.name, 
+          artist: myRole === 'admin' ? (myDJName || "Super Admin") : `DJ ${myDJName}` 
+        } 
+      });
       if (item.arrayBuffer) {
         item.arrayBuffer().then(ab => {
           socket.emit('dj-audio-stream', { type: 'music', buffer: ab });
@@ -603,7 +609,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (btnPlayMusic) {
     btnPlayMusic.onclick = () => {
-      if (!isShowLive) return alert("⚠️ กรุณากดปุ่ม '🔴 เริ่มจัดรายการ (Go Live)' ก่อนครับ!");
       if (playlist.length === 0) return alert('ไม่มีเพลงในคิว');
       playItemAtIndex(0);
     };
@@ -717,7 +722,6 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/\(L\)/gi, '❤️');
   }
 
-  // แสดงผลข้อความแชท พร้อมยศ Super Admin / DJ On-Air / DJ Station
   function renderMessage(data) {
     if (!chatLogs) return;
     const bubble = document.createElement('div');
@@ -811,7 +815,7 @@ document.addEventListener('DOMContentLoaded', () => {
         user, 
         status, 
         text, 
-        role: myRole, // ส่งยศปัจจุบันติดไปทุกข้อความ
+        role: myRole, // ส่งยศปัจจุบันติดไปทุกข้อความแชท
         style: { ...currentStyle } 
       });
     }
@@ -1035,7 +1039,7 @@ document.addEventListener('DOMContentLoaded', () => {
         source.connect(musicGainNode);
 
         source.onended = () => {
-          if ((myRole === 'admin' || myRole === 'dj') && isShowLive && playlist.length > 0) {
+          if ((myRole === 'admin' || myRole === 'dj') && playlist.length > 0) {
             playItemAtIndex(0);
           }
         };
@@ -1271,12 +1275,19 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  // ช่องล็อกอินจะดึงชื่อที่เคยจำไว้มาใส่ล่วงหน้า
   if (btnOpenLoginModal && loginModal) {
     btnOpenLoginModal.onclick = () => {
-      loginUserInput.value = ''; loginPassInput.value = ''; 
+      const lastSavedNick = localStorage.getItem('saved_username') || '';
+      loginUserInput.value = (lastSavedNick.startsWith('Guest_') || lastSavedNick === 'Super Admin') ? '' : lastSavedNick;
+      loginPassInput.value = ''; 
       if (loginError) loginError.classList.add('hide');
       loginModal.classList.remove('hide'); 
-      loginUserInput.focus();
+      if (loginUserInput.value) {
+        loginPassInput.focus();
+      } else {
+        loginUserInput.focus();
+      }
     };
   }
   if (loginBtnCancel && loginModal) loginBtnCancel.onclick = () => loginModal.classList.add('hide');
@@ -1309,6 +1320,7 @@ document.addEventListener('DOMContentLoaded', () => {
         user: sender,
         status: userstatusInput ? userstatusInput.value.trim() : '',
         text: `🎁 ได้ส่งของขวัญ "${giftType}" ให้กับสถานีและดีเจ!`,
+        role: myRole,
         style: { bold: true, color: '#b45309' }
       });
     };
@@ -1378,15 +1390,23 @@ document.addEventListener('DOMContentLoaded', () => {
     };
   }
 
+  // ฟังก์ชันอัปเดต UI บทบาท และซิงค์ชื่อแอดมิน/ดีเจลงช่องแชททันที
   function applyRoleUI(role, name) {
     myRole = role;
-    myDJName = name;
+    myDJName = name || (role === 'admin' ? 'Super Admin' : 'DJ');
+
+    if (usernameInput) {
+      usernameInput.value = myDJName;
+      currentConfirmedNick = myDJName;
+      localStorage.setItem('saved_username', myDJName);
+      socket.emit('check-or-set-username', myDJName, () => {});
+    }
 
     if (role === 'admin') {
       djLoginSection.classList.add('hide');
       djPortalSection.classList.add('hide');
       djControlsSection.classList.remove('hide');
-      roleBadge.textContent = "👑 Super Admin";
+      roleBadge.textContent = `👑 ${myDJName}`;
       roleBadge.style.background = "#fee2e2";
       roleBadge.style.color = "#991b1b";
       roleBadge.style.borderColor = "#ef4444";
@@ -1397,7 +1417,7 @@ document.addEventListener('DOMContentLoaded', () => {
       djLoginSection.classList.add('hide');
       djPortalSection.classList.add('hide');
       djControlsSection.classList.remove('hide');
-      roleBadge.textContent = `🎧 DJ ${name}`;
+      roleBadge.textContent = `🎧 DJ ${myDJName}`;
       roleBadge.style.background = "#fef08a";
       roleBadge.style.color = "#713f12";
       roleBadge.style.borderColor = "#ca8a04";
@@ -1406,8 +1426,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (role === 'dj_member') {
       djLoginSection.classList.add('hide');
       djPortalSection.classList.remove('hide');
-      djPortalName.textContent = name;
-      usernameInput.value = name;
+      djPortalName.textContent = myDJName;
     }
     renderPlaylist();
   }
@@ -1483,7 +1502,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // สำรองฐานข้อมูลดีเจฝั่งแอดมิน
   socket.on('admin-djs-backup-sync', (allDjsData) => {
     if (myRole === 'admin' && allDjsData && Object.keys(allDjsData).length > 0) {
       localStorage.setItem('y2k_dj_database_backup', JSON.stringify(allDjsData));
@@ -1617,7 +1635,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const p = particles[i];
       p.x += p.vx; p.y += p.vy; p.alpha -= 0.025;
       gCtx.fillStyle = p.color; gCtx.globalAlpha = Math.max(0, p.alpha);
-      gCtx.beginPath(); gCtx.arc(p.x, p.size / 2, 0, Math.PI * 2); gCtx.fill();
+      gCtx.beginPath(); gCtx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2); gCtx.fill();
       if (p.alpha <= 0) { particles.splice(i, 1); i--; }
     }
     requestAnimationFrame(animateGlitter);

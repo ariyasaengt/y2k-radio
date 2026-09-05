@@ -96,7 +96,6 @@ function saveRegisteredDJs() {
 }
 loadRegisteredDJs();
 
-// สถิติผู้เข้าชม
 const STATS_FILE = path.join(__dirname, 'stats.json');
 let siteStats = { totalHits: 0, visitedTokens: [] };
 
@@ -399,7 +398,6 @@ io.on('connection', (socket) => {
     activeUsers.set(socket.id, cleanUser);
     socket.currentNick = cleanUser;
 
-    // ตรวจสอบบทบาทจริง ป้องกันการปลอมแปลงสิทธิ์
     let assignedRole = socket.userRole || 'listener';
     if (assignedRole === 'listener' && data.role && data.role !== 'admin') {
       assignedRole = data.role;
@@ -636,14 +634,22 @@ io.on('connection', (socket) => {
     startAutoDJ();
   });
 
+  // เล่นเพลงและเปิดสถานะ On-Air สดให้อัตโนมัติทันที
   socket.on('dj-play-youtube', (ytData) => {
-    if (!isDJLive) return;
     if (socket.userRole !== 'admin' && socket.userRole !== 'dj') return;
+
+    if (!isDJLive) {
+      isDJLive = true;
+      showStartedAt = Date.now();
+      currentBroadcaster = { socketId: socket.id, role: socket.userRole, username: socket.djName };
+      saveStationState();
+      io.emit('dj-status-update', { isLive: true, startedAt: showStartedAt });
+    }
 
     const startedAt = Date.now();
     currentTrack = {
       title: ytData.title || "YouTube Audio",
-      artist: socket.userRole === 'admin' ? "Super Admin" : `DJ ${socket.djName}`,
+      artist: socket.userRole === 'admin' ? (socket.djName || "Super Admin") : `DJ ${socket.djName}`,
       duration: 0,
       youtubeId: ytData.videoId,
       startedAt: startedAt
